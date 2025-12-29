@@ -1,7 +1,7 @@
 import React from 'react'
 import images from '../assets/Images';
 
-const AuthLayout = ({ title = "Welcome", children }) => {
+const AuthLayout = ({ title = "Welcome", description, children }) => {
   return (
     <div className="flex flex-col lg:flex-row h-screen w-full">
       {/* Left Section */}
@@ -17,11 +17,10 @@ const AuthLayout = ({ title = "Welcome", children }) => {
           </div>
           <div>
             <h2 className="text-3xl md:text-5xl font-nunitoBold leading-tight">
-              Lorem ipsum dolor sit amet, consectetur.
+              Care, support, and progress — in one place.
             </h2>
             <p className="mt-4 text-sm md:text-base font-nunitoReguler">
-              Praesent gravida tincidunt blandit. Ut porta aliquet nulla. Nullam vel
-              metus semper, ullamcorper ipsum sed, lacinia mauris. Suspendisse potenti.
+              MindCare helps therapists manage appointments, sessions, and client progress securely.
             </p>
           </div>
         </div>
@@ -30,6 +29,11 @@ const AuthLayout = ({ title = "Welcome", children }) => {
       {/* Right Section */}
       <div className="w-full lg:w-[40%] flex flex-col justify-center items-center bg-white p-6 md:p-10">
         <h2 className="text-3xl md:text-4xl font-nunitoSemiBold mb-6">{title}</h2>
+        {description ? (
+          <p className="text-center text-gray-500 mb-6">
+            {description}
+          </p>
+        ) : null}
         <div className="w-full max-w-sm">
           {children}
         </div>

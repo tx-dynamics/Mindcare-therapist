@@ -15,10 +15,10 @@ export default function ForgotPasswordPage() {
   const navigate = useNavigate();
   const [apiError, setApiError] = useState('');
   return (
-    <AuthLayout title="Forget Password">
-      <p className="text-center text-gray-500 mb-6">
-        Donec porta gravida rutrum. Etiam ultrices odio non dui facilisis, sollicitudin tincidunt
-      </p>
+    <AuthLayout
+      title="Forgot Password"
+      description="Enter your email to receive a 6-digit OTP to reset your password."
+    >
       <Formik
         initialValues={{ email: '' }}
         validationSchema={ForgotPasswordSchema}

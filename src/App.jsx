@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import {
   SignIn,
   ForgotPasswordPage,
@@ -26,10 +26,12 @@ export default function App() {
 
         {/* Protected Home Layout with nested routes */}
         <Route path="home" element={<Home />} >
+            <Route index element={<Dashboard />} />
             <Route path="dashboard" element={<Dashboard />} />
              <Route path="my-profile" element={<MyProfile />} />
           <Route path="appointments" element={<Appointment />} />
-          <Route path="session history" element={<SessionHistory />} />
+          <Route path="session-history" element={<SessionHistory />} />
+          <Route path="session history" element={<Navigate to="../session-history" replace />} />
           <Route path="track-attendance" element={<TrackAttendence />} />
         </Route>
       </Routes>

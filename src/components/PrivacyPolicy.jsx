@@ -1,27 +1,69 @@
 import { useEffect, useState } from "react";
+ import { Method, callApi } from "../netwrok/NetworkManager";
+import { api } from "../netwrok/Environment";
 
 const PrivacyPolicy = () => {
   const [terms, setTerms] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [apiError, setApiError] = useState("");
 
   useEffect(() => {
-    // Simulating API call
-    const dummyTerms = [
-      `Your privacy is important to us. It is Brainstorming's policy to respect your privacy regarding any information we may collect from you across our website, and other sites we own and operate. We only ask for personal information when we truly need it to provide a service to you. We collect it by fair and lawful means, with your knowledge and consent. We also let you know why we’re collecting it and how it will be used.
-      
-We only retain collected information for as long as necessary to provide you with your requested service. What data we store, we’ll protect within commercially acceptable means to prevent loss and theft, as well as unauthorized access, disclosure, copying, use or modification.
+    setIsLoading(true);
+    setApiError("");
 
-We don’t share any personally identifying information publicly or with third-parties, except when required to by law.Your privacy is important to us. It is Brainstorming's policy to respect your privacy regarding any information we may collect from you across our website, and other sites we own and operate. We only ask for personal information when we truly need it to provide a service to you. We collect it by fair and lawful means, with your knowledge and consent. We also let you know why we’re collecting it and how it will be used.
-      
-We only retain collected information for as long as necessary to provide you with your requested service. What data we store, we’ll protect within commercially acceptable means to prevent loss and theft, as well as unauthorized access, disclosure, copying, use or modification.
+    callApi({
+      method: Method.GET,
+      endPoint: api.privacyPolicy,
+      onSuccess: (response) => {
+        const payload = response?.data ?? response;
 
-We don’t share any personally identifying information publicly or with third-parties, except when required to by law.`
-    ];
-    setTerms(dummyTerms);
+        if (typeof payload?.privacyPolicy?.content === "string") {
+          setTerms(payload.privacyPolicy.content.trim() ? [payload.privacyPolicy.content] : []);
+          setIsLoading(false);
+          return;
+        }
+
+        if (Array.isArray(payload)) {
+          setTerms(payload.filter(Boolean));
+        } else if (typeof payload === "string") {
+          setTerms(payload.trim() ? [payload] : []);
+        } else if (payload && typeof payload === "object") {
+          const nestedPolicy =
+            payload?.privacyPolicy?.content ??
+            payload?.data?.privacyPolicy?.content ??
+            payload?.privacyPolicy?.privacyPolicy?.content ??
+            payload?.policy?.content;
+
+          const content =
+            nestedPolicy ??
+            payload?.content ??
+            payload?.text ??
+            payload?.policy ??
+            payload?.privacyPolicy?.content ??
+            payload?.privacyPolicy ??
+            payload?.description;
+
+          if (Array.isArray(content)) setTerms(content.filter(Boolean));
+          else if (typeof content === "string") setTerms(content.trim() ? [content] : []);
+          else setTerms([]);
+        } else {
+          setTerms([]);
+        }
+
+        setIsLoading(false);
+      },
+      onError: (error) => {
+        setApiError(error?.message || "Failed to load privacy policy.");
+        setIsLoading(false);
+      },
+    });
   }, []);
 
   return (
     <div className="prose max-w-none text-sm text-gray-700 px-4 py-6">
       <h2 className="text-center text-lg font-semibold mb-4">Privacy Policy</h2>
+      {isLoading && <p className="text-[#92979D]">Loading...</p>}
+      {!isLoading && apiError && <p className="text-red-500">{apiError}</p>}
       {terms.map((term, idx) => (
         <p className="text-[#92979D] whitespace-pre-line" key={idx}>
           {term}

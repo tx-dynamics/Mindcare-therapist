@@ -32,7 +32,7 @@ export default function SignIn() {
   };
 
   return (
-   <AuthLayout title="Welcome Back">
+   <AuthLayout title="Welcome Back" description="Sign in to manage appointments, sessions, and your profile.">
       <Formik
         initialValues={{ email: '', password: '' }}
         validationSchema={loginValidationSchema}

@@ -84,10 +84,10 @@ const OTPPage = () => {
   };
 
   return (
-    <AuthLayout title="OTP">
-     <p className="text-center text-gray-500 mb-6">
-     Donec porta gravida rutrum. Etiam ultrices odio non dui facilisis, sollicitudin tincidunt
-      </p>
+    <AuthLayout
+      title="OTP"
+      description={email ? `Enter the 6-digit code sent to ${email}.` : 'Enter the 6-digit code to continue.'}
+    >
      <div className="flex justify-between mb-3">
         {otp.map((digit, index) => (
           <input
@@ -128,7 +128,6 @@ const OTPPage = () => {
 };
 
 export default OTPPage;
-
 
 
 

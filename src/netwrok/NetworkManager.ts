@@ -223,6 +223,14 @@ export const callApi = async ({
           }
         }
 
+        if (
+          endPoint.includes("auth/update-password") &&
+          (message.includes("old password") || message.includes("incorrect"))
+        ) {
+          onError && onError(serverError);
+          return;
+        }
+
         // 🧩 Case 3: other 401 errors (like no token at all)
         handleAuthenticationError(
           useAuthStore.getState().logout,

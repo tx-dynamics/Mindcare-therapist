@@ -7,6 +7,9 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapPin, X } from 'lucide-react';
 import TimeSlot from '../../components/TimeSlot';
+import { Method, callApi } from '../../netwrok/NetworkManager';
+import { api } from '../../netwrok/Environment';
+import { useAuthStore } from '../../store/authSlice';
 
 const ProfileSchema = Yup.object().shape({
   name: Yup.string().required('Name is required'),
@@ -22,7 +25,11 @@ const ProfileCreation = () => {
   const navigate = useNavigate();
   const [selectedSpecializations, setSelectedSpecializations] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [draftProfile, setDraftProfile] = useState(null);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [apiError, setApiError] = useState('');
   const specializations = ['Stress', 'Anxiety', 'Sleep', 'Focus'];
+  const updateUserData = useAuthStore((s) => s.updateUserData);
 
   const toggleSpecialization = (item, setFieldValue) => {
     const updated = selectedSpecializations.includes(item)
@@ -39,6 +46,52 @@ const ProfileCreation = () => {
       const imageUrl = URL.createObjectURL(file); // preview URL
       setImage(imageUrl);
     }
+  };
+  const mapSpecializationKey = (value) => {
+    const mapping = {
+      Stress: 'stress_management',
+      Anxiety: 'anxiety',
+      Sleep: 'sleep',
+      Focus: 'focus',
+    };
+    if (mapping[value]) return mapping[value];
+    return String(value).trim().toLowerCase().replaceAll(' ', '_');
+  };
+
+  const handleSubmitProfile = async (availability) => {
+    if (!draftProfile || isSavingProfile) return;
+    setIsSavingProfile(true);
+    setApiError('');
+
+    const payload = {
+      name: draftProfile.name,
+      profileImage: image || undefined,
+      location: draftProfile.location,
+      bio: draftProfile.bio,
+      specializations: (draftProfile.specializations || []).map(mapSpecializationKey),
+      availability,
+    };
+
+    await callApi({
+      method: Method.POST,
+      endPoint: api.therapistProfile,
+      bodyParams: payload,
+      onSuccess: (response) => {
+        const updated = response?.data;
+        if (updated?.user?.isProfileCompleted != null) {
+          updateUserData({ isProfileCompleted: updated.user.isProfileCompleted });
+        } else {
+          updateUserData({ isProfileCompleted: true });
+        }
+        setIsModalOpen(false);
+        navigate('/home');
+      },
+      onError: (err) => {
+        setApiError(err?.message || 'Failed to update profile.');
+      },
+    });
+
+    setIsSavingProfile(false);
   };
      const Modal = ({ onClose, children }) => {
   return (
@@ -63,12 +116,12 @@ const ProfileCreation = () => {
    };
   return (
     <div className='min-height flex'> 
-    <AuthLayout title=''>
+    <AuthLayout title="Profile Creation" description="Complete your profile to start receiving appointments.">
       <Formik
         initialValues={{ name: '', location: '', bio: '', specializations: [] }}
         validationSchema={ProfileSchema}
         onSubmit={(values) => {
-          console.log('Form values:', values); // for debugging
+          setDraftProfile(values);
           setIsModalOpen(true);
         }}
       >
@@ -77,7 +130,6 @@ const ProfileCreation = () => {
            
 
             {/* Profile Image Upload */}
-           <h2 className="text-2xl  font-nunitoBold text-center flex justify-center items-center">Profile Creation</h2>
             <div className="flex justify-center items-center ">
               <label htmlFor="imageUpload" className="cursor-pointer">
                 <img
@@ -150,6 +202,7 @@ const ProfileCreation = () => {
               })}
             </div>
             <ErrorMessage name="specializations" component="div" className="text-red-500 text-sm mt-1" />
+            {apiError ? <div className="text-red-500 text-sm mt-1">{apiError}</div> : null}
 
             {/* Submit Button */}
             <div className="flex justify-end items-center mt-4">
@@ -163,7 +216,7 @@ const ProfileCreation = () => {
             {isModalOpen &&  (
        <Modal onClose={() => setIsModalOpen(false)}>
 
- <TimeSlot onClick={()=>navigate('/home')} />
+ <TimeSlot onNext={handleSubmitProfile} isSubmitting={isSavingProfile} />
 
 </Modal>
       )}

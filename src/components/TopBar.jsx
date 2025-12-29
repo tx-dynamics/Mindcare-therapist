@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import images from '../assets/Images';
 import NotificationModal from './NotificationModal';
 
-const TopBar = ({onClick}) => {
+const TopBar = ({ onClick, profile }) => {
   const [showModal, setShowModal] = useState(false);
 const [notifications, setNotifications] = useState([
     { id: 1, text: 'Notification received', time: 'Today | 09:24 AM', isNew: true },
@@ -18,10 +18,24 @@ const [notifications, setNotifications] = useState([
 
   const unreadCount = notifications.filter(n => n.isNew).length;
 
+  const displayName =
+    profile?.name ||
+    profile?.fullName ||
+    profile?.user?.name ||
+    profile?.user?.fullName ||
+    'Therapist';
+  const firstName = String(displayName).trim().split(' ')[0] || 'Therapist';
+  const role = profile?.user?.role || profile?.role || 'Therapist';
+  const avatar =
+    profile?.profileImage ||
+    profile?.user?.profileImage ||
+    profile?.user?.avatar ||
+    'https://i.pravatar.cc/40';
+
   return (
     <header className="w-full bg-white  px-6 py-3 rounded-[12px] mb-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
-        <div className="text-lg font-medium text-gray-800">Hi, Sadiq</div>
+        <div className="text-lg font-medium text-gray-800">{`Hi, ${firstName}`}</div>
 
         <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto">
           <button
@@ -30,13 +44,13 @@ const [notifications, setNotifications] = useState([
             type="button"
           >
             <img
-              src="https://i.pravatar.cc/40"
+              src={avatar}
               className="w-10 h-10 rounded-full"
               alt="User Avatar"
             />
             <div className="flex flex-col justify-center min-w-0 max-w-[180px] sm:max-w-none">
-              <p className="text-sm font-medium text-gray-900 truncate">Name Here</p>
-              <p className="text-xs text-green-600 truncate">Therapist</p>
+              <p className="text-sm font-medium text-gray-900 truncate">{displayName}</p>
+              <p className="text-xs text-green-600 truncate">{role}</p>
             </div>
           </button>
 

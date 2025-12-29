@@ -1,16 +1,61 @@
-import React, { useState } from 'react';
-import { ArrowLeft, Calendar, ChevronDown, Clock, X } from 'lucide-react';
-import { appointmentsData } from '../../components/Data';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ArrowLeft, Calendar, ChevronDown, Clock, MapPin, X } from 'lucide-react';
+import { Method, callApi } from '../../netwrok/NetworkManager';
+import { api } from '../../netwrok/Environment';
 
 const Appointment = () => {
-  const [activeTab, setActiveTab] = useState('upcoming');
   const [selectedAppointment, setSelectedAppointment] = useState(null);
    const [isModalOpen, setIsModalOpen] = useState(false);
    const [error, setError] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
     const [showCalendar, setShowCalendar] = useState(false);
 const [feedback, setFeedback] = useState('');
-  // Sample appointments data
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
+  const [search, setSearch] = useState('');
+  const [specializations, setSpecializations] = useState('');
+  const [therapists, setTherapists] = useState([]);
+  const [meta, setMeta] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [apiError, setApiError] = useState('');
+
+  const endPoint = useMemo(() => {
+    const params = new URLSearchParams();
+    params.set('page', String(page));
+    params.set('limit', String(limit));
+    if (search.trim()) params.set('search', search.trim());
+    if (specializations.trim()) params.set('specializations', specializations.trim());
+    const query = params.toString();
+    return query ? `${api.appointmentsTherapists}?${query}` : api.appointmentsTherapists;
+  }, [limit, page, search, specializations]);
+
+  useEffect(() => {
+    let isActive = true;
+    setIsLoading(true);
+    setApiError('');
+
+    void callApi({
+      method: Method.GET,
+      endPoint,
+      onSuccess: (response) => {
+        if (!isActive) return;
+        setTherapists(Array.isArray(response?.data) ? response.data : []);
+        setMeta(response?.meta ?? null);
+        setIsLoading(false);
+      },
+      onError: (err) => {
+        if (!isActive) return;
+        setApiError(err?.message || 'Failed to load therapists.');
+        setTherapists([]);
+        setMeta(null);
+        setIsLoading(false);
+      },
+    });
+
+    return () => {
+      isActive = false;
+    };
+  }, [endPoint]);
 
   const formatDate = (date) => {
     return date.toLocaleDateString('en-US', {
@@ -58,73 +103,6 @@ const [feedback, setFeedback] = useState('');
   };
 
 
-  const completedAppointments = [
-    {
-      id: 13,
-      name: "Lisa Anderson",
-      date: "10 JAN, 2024",
-      time: "10:00 AM",
-      avatar: "https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?w=150&h=150&fit=crop&crop=face",
-      goals: "Completed therapy for social anxiety. Successfully developed confidence in public speaking and group interactions.",
-      note: "Final session completed successfully. Student has made remarkable progress and feels confident to continue independently. Follow-up scheduled in 3 months.",
-      aiSummary: "Treatment goals successfully achieved. Student demonstrates significant improvement in social confidence and anxiety management skills."
-    },
-    {
-      id: 14,
-      name: "Kevin Park",
-      date: "08 JAN, 2024",
-      time: "2:00 PM",
-      avatar: "https://images.unsplash.com/photo-1502767089025-6572583495b9?w=150&h=150&fit=crop&crop=face",
-      goals: "Completed anger management program. Successfully learned emotional regulation and conflict resolution techniques.",
-      note: "Program completed with excellent results. Student reports improved relationships at home and school. Parents very pleased with progress.",
-      aiSummary: "Anger management program successfully completed. Student achieved all therapeutic goals and shows sustained behavioral improvements."
-    },
-    {
-      id: 15,
-      name: "Hannah Kim",
-      date: "05 JAN, 2024",
-      time: "3:30 PM",
-      avatar: "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=150&h=150&fit=crop&crop=face",
-      goals: "Completed grief counseling following family loss. Successfully processed emotions and developed healthy coping strategies.",
-      note: "Grief work completed successfully. Student has processed loss in healthy way and developed strong coping mechanisms. Resilience building achieved.",
-      aiSummary: "Grief counseling concluded with positive outcomes. Student demonstrates healthy grief processing and strong emotional resilience."
-    },
-    {
-      id: 16,
-      name: "Marcus Johnson",
-      date: "03 JAN, 2024",
-      time: "1:00 PM",
-      avatar: "https://images.unsplash.com/photo-1507591064344-4c6ce005b128?w=150&h=150&fit=crop&crop=face",
-      goals: "Completed academic stress management program. Successfully developed study strategies and stress reduction techniques.",
-      note: "Academic support program completed. Student achieved improved grades and better stress management. Ready for independent academic success.",
-      aiSummary: "Academic stress management program successfully completed. Student shows significant improvement in both academic performance and stress levels."
-    },
-    {
-      id: 17,
-      name: "Zoe Martinez",
-      date: "01 JAN, 2024",
-      time: "11:30 AM",
-      avatar: "https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?w=150&h=150&fit=crop&crop=face",
-      goals: "Completed self-esteem building program. Successfully developed positive self-image and confidence in personal abilities.",
-      note: "Self-esteem work completed with excellent outcomes. Student shows remarkable confidence improvement and positive self-regard.",
-      aiSummary: "Self-esteem building program concluded successfully. Student achieved significant improvements in self-confidence and self-worth."
-    },
-    {
-      id: 18,
-      name: "Tyler Brooks",
-      date: "28 DEC, 2023",
-      time: "4:00 PM",
-      avatar: "https://images.unsplash.com/photo-1520813792240-56fc4a3765a7?w=150&h=150&fit=crop&crop=face",
-      goals: "Completed relationship counseling program. Successfully improved communication skills and family dynamics.",
-      note: "Family therapy goals achieved. Improved communication between student and parents. Family reports much better relationships at home.",
-      aiSummary: "Relationship counseling program completed with positive family outcomes. Communication skills and family dynamics significantly improved."
-    }
-  ];
-
-  const getCurrentAppointments = () => {
-    return activeTab === 'upcoming' ? appointmentsData : completedAppointments;
-  };
-
   const handleAppointmentClick = (appointment) => {
     setSelectedAppointment(appointment);
   };
@@ -133,10 +111,6 @@ const [feedback, setFeedback] = useState('');
     setSelectedAppointment(null);
   };
 
-  const handleTabChange = (tab) => {
-    setActiveTab(tab);
-    setSelectedAppointment(null);
-  };
      const Modal = ({ onClose, children }) => {
   return (
     <div className="fixed inset-0 backdrop-blur-sm bg-black/10 flex items-center justify-center z-50"
@@ -157,6 +131,22 @@ const [feedback, setFeedback] = useState('');
   
 
   if (selectedAppointment) {
+    const name =
+      selectedAppointment?.name ||
+      selectedAppointment?.fullName ||
+      selectedAppointment?.user?.name ||
+      'Profile';
+    const profileImage =
+      selectedAppointment?.profileImage ||
+      selectedAppointment?.avatar ||
+      selectedAppointment?.photo ||
+      'https://i.pravatar.cc/120';
+    const location = selectedAppointment?.location || selectedAppointment?.city || '';
+    const bio = selectedAppointment?.bio || '';
+    const specializationsList = Array.isArray(selectedAppointment?.specializations)
+      ? selectedAppointment.specializations
+      : [];
+
     return (
       <>
       <div className="min-h-screen">
@@ -174,51 +164,84 @@ const [feedback, setFeedback] = useState('');
             {/* Student Info */}
             <div className="flex items-center mb-8">
               <img 
-                src={selectedAppointment.avatar} 
-                alt={selectedAppointment.name}
+                src={profileImage} 
+                alt={name}
                 className="w-16 h-16 rounded-full object-cover mr-4"
               />
-              <h1 className="text-2xl font-semibold text-gray-800">{selectedAppointment.name}</h1>
-            </div>
-
-            {/* Appointment Details */}
-            <div className="mb-8">
-              <h2 className="text-lg font-bold text-gray-800 mb-1">Appointment date & time</h2>
-              <div className="flex flex-wrap items-center gap-4 text-gray-600">
-                <div className="flex items-center">
-                  <Calendar className="w-5 h-5 mr-2" />
-                  <span>{selectedAppointment.date}</span>
-                </div>
-                <div className="flex items-center">
-                  <Clock className="w-5 h-5 mr-2" />
-                  <span>{selectedAppointment.time}</span>
-                </div>
+              <div className="flex-1 min-w-0">
+                <h1 className="text-2xl font-semibold text-gray-800 truncate">{name}</h1>
+                {location ? (
+                  <div className="flex items-center gap-2 text-gray-600 mt-1">
+                    <MapPin className="w-4 h-4" />
+                    <span className="text-sm truncate">{location}</span>
+                  </div>
+                ) : null}
               </div>
             </div>
 
-            {/* Mental Health Goals */}
-            <div className="mb-8">
-              <h2 className="text-lg font-bold text-gray-800 mb-1">Mental Health Goals</h2>
-              <p className="text-gray-600 leading-relaxed">{selectedAppointment.goals}</p>
-            </div>
+            {selectedAppointment?.date || selectedAppointment?.time ? (
+              <div className="mb-8">
+                <h2 className="text-lg font-bold text-gray-800 mb-1">Appointment date & time</h2>
+                <div className="flex flex-wrap items-center gap-4 text-gray-600">
+                  {selectedAppointment?.date ? (
+                    <div className="flex items-center">
+                      <Calendar className="w-5 h-5 mr-2" />
+                      <span>{selectedAppointment.date}</span>
+                    </div>
+                  ) : null}
+                  {selectedAppointment?.time ? (
+                    <div className="flex items-center">
+                      <Clock className="w-5 h-5 mr-2" />
+                      <span>{selectedAppointment.time}</span>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
 
-            {/* Note */}
-            <div className="mb-8">
-              <h2 className="text-lg font-bold text-gray-800 mb-1">Note</h2>
-              <p className="text-gray-600 leading-relaxed">{selectedAppointment.note}</p>
-            </div>
+            {bio ? (
+              <div className="mb-8">
+                <h2 className="text-lg font-bold text-gray-800 mb-1">Bio</h2>
+                <p className="text-gray-600 leading-relaxed">{bio}</p>
+              </div>
+            ) : null}
 
-            {/* AI Summary */}
-            <div>
-              <h2 className="text-lg font-bold text-gray-800 mb-1">Ai Summary</h2>
-              <p className="text-gray-600 leading-relaxed">{selectedAppointment.aiSummary}</p>
-            </div>
-              {activeTab === 'completed' && (  
-              <div className='flex justify-end w-full'>
-<button  onClick={()=>setIsModalOpen(true)} className="bg-teal-700 text-white  px-6 py-2 mt-6 rounded-md hover:bg-teal-800  transition-colors ">
-          Give Feedback
-        </button>
-            </div>)}
+            {specializationsList.length ? (
+              <div className="mb-8">
+                <h2 className="text-lg font-bold text-gray-800 mb-3">Specializations</h2>
+                <div className="flex flex-wrap gap-2">
+                  {specializationsList.map((s) => (
+                    <span
+                      key={String(s)}
+                      className="px-3 py-1 rounded-full text-sm bg-teal-50 text-teal-700"
+                    >
+                      {String(s).replaceAll('_', ' ')}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {selectedAppointment?.goals ? (
+              <div className="mb-8">
+                <h2 className="text-lg font-bold text-gray-800 mb-1">Mental Health Goals</h2>
+                <p className="text-gray-600 leading-relaxed">{selectedAppointment.goals}</p>
+              </div>
+            ) : null}
+
+            {selectedAppointment?.note ? (
+              <div className="mb-8">
+                <h2 className="text-lg font-bold text-gray-800 mb-1">Note</h2>
+                <p className="text-gray-600 leading-relaxed">{selectedAppointment.note}</p>
+              </div>
+            ) : null}
+
+            {selectedAppointment?.aiSummary ? (
+              <div>
+                <h2 className="text-lg font-bold text-gray-800 mb-1">Ai Summary</h2>
+                <p className="text-gray-600 leading-relaxed">{selectedAppointment.aiSummary}</p>
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
@@ -279,10 +302,35 @@ const [feedback, setFeedback] = useState('');
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-8">
-          <h1 className="text-2xl font-bold text-gray-800 mb-4 sm:mb-0">My Appointments</h1>
-          
-          {/* Date Picker - Only show for Upcoming tab */}
-          {activeTab === 'upcoming' && (
+          <div>
+            <h1 className="text-2xl font-bold text-gray-800 mb-2 sm:mb-0">Appointments</h1>
+            {meta?.totalItems != null ? (
+              <p className="text-sm text-gray-500 mt-1">Total: {meta.totalItems}</p>
+            ) : null}
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+            <input
+              value={search}
+              onChange={(e) => {
+                setPage(1);
+                setSearch(e.target.value);
+              }}
+              placeholder="Search name or bio"
+              className="px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+            />
+            <input
+              value={specializations}
+              onChange={(e) => {
+                setPage(1);
+                setSpecializations(e.target.value);
+              }}
+              placeholder="specializations (comma separated)"
+              className="px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+            />
+          </div>
+
+          <div className="hidden">
               <div className="relative">
               <button
                 onClick={() => setShowCalendar(!showCalendar)}
@@ -342,55 +390,84 @@ const [feedback, setFeedback] = useState('');
                 </div>
               )}
             </div>
-          )}
+          </div>
         </div>
-
-        {/* Tab Navigation */}
-        <div className="flex mb-8">
-          <button
-            onClick={() => handleTabChange('upcoming')}
-            className={`px-6 py-2 rounded-full text-sm font-medium mr-2 transition-colors ${
-              activeTab === 'upcoming'
-                ? 'bg-teal-600 text-white'
-                : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-            }`}
-          >
-            Upcoming
-          </button>
-          <button
-            onClick={() => handleTabChange('completed')}
-            className={`px-6 py-2 rounded-full text-sm font-medium transition-colors ${
-              activeTab === 'completed'
-                ? 'bg-teal-600 text-white'
-                : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-            }`}
-          >
-            Completed
-          </button>
-        </div>
+        {apiError ? <div className="text-red-500 text-sm mb-6">{apiError}</div> : null}
 
         {/* Appointments Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-          {getCurrentAppointments().map((appointment) => (
-            <div 
-              key={appointment.id}
-              onClick={() => handleAppointmentClick(appointment)}
-              className="bg-white rounded-3xl  p-6 cursor-pointer  duration-200"
-            >
-              <div className="flex items-center">
-                <img 
-                  src={appointment.avatar} 
-                  alt={appointment.name}
-                  className="w-12 h-12 rounded-full object-cover mr-4"
-                />
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-1">{appointment.name}</h3>
-                  <p className="text-sm text-gray-600">{appointment.date} - {appointment.time}</p>
+          {isLoading ? (
+            <div className="text-gray-600">Loading...</div>
+          ) : null}
+          {!isLoading && therapists.length === 0 ? (
+            <div className="text-gray-600">No results found.</div>
+          ) : null}
+          {therapists.map((therapist, idx) => {
+            const title =
+              therapist?.name || therapist?.fullName || therapist?.user?.name || therapist?.user?.email || 'Therapist';
+            const image = therapist?.profileImage || therapist?.avatar || therapist?.photo || 'https://i.pravatar.cc/120';
+            const subtitle = therapist?.location || therapist?.bio || '';
+            const key = therapist?._id || therapist?.id || therapist?.user?._id || `${therapist?.name || 'therapist'}-${idx}`;
+
+            return (
+              <div
+                key={key}
+                onClick={() => handleAppointmentClick(therapist)}
+                className="bg-white rounded-3xl  p-6 cursor-pointer  duration-200"
+              >
+                <div className="flex items-center">
+                  <img
+                    src={image}
+                    alt={title}
+                    className="w-12 h-12 rounded-full object-cover mr-4"
+                  />
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-1">{title}</h3>
+                    {subtitle ? <p className="text-sm text-gray-600 line-clamp-2">{subtitle}</p> : null}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
+
+        {meta?.totalPages ? (
+          <div className="flex items-center justify-end gap-3 mt-8">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1 || isLoading}
+              className="px-4 py-2 bg-white border border-gray-300 rounded-lg disabled:opacity-50"
+            >
+              Prev
+            </button>
+            <span className="text-sm text-gray-600">
+              Page {page} / {meta.totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.min(meta.totalPages, p + 1))}
+              disabled={page >= meta.totalPages || isLoading}
+              className="px-4 py-2 bg-white border border-gray-300 rounded-lg disabled:opacity-50"
+            >
+              Next
+            </button>
+            <select
+              value={limit}
+              onChange={(e) => {
+                setPage(1);
+                setLimit(Number(e.target.value) || 10);
+              }}
+              className="px-3 py-2 bg-white border border-gray-300 rounded-lg"
+            >
+              {[5, 10, 20, 50].map((n) => (
+                <option key={n} value={n}>
+                  {n} / page
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
       </div>
     </div>
    

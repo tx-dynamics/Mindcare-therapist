@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ChevronRight } from 'lucide-react';
+import { useOutletContext } from 'react-router-dom';
 import EditProfile from '../../components/EditProfile';
 import ChangePassword from '../../components/ChangePassword';
 import TermsConditions from '../../components/TermCondition';
@@ -7,11 +8,12 @@ import PrivacyPolicy from '../../components/PrivacyPolicy';
 
 const MyProfile = () => {
   const [selectedSection, setSelectedSection] = useState('editProfile');
+  const { therapistProfile } = useOutletContext() || {};
 
   const renderContent = () => {
     switch (selectedSection) {
       case 'editProfile':
-        return <EditProfile />;
+        return <EditProfile profile={therapistProfile} />;
       case 'changePassword':
         return <ChangePassword />;
       case 'terms':

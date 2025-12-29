@@ -3,6 +3,9 @@ import { useNavigate, Outlet } from 'react-router-dom';
 import SidebarItem from '../../components/SideBarItem';
 import images from '../../assets/Images';
 import TopBar from '../../components/TopBar';
+import { Method, callApi } from '../../netwrok/NetworkManager';
+import { api } from '../../netwrok/Environment';
+import { useAuthStore } from '../../store/authSlice';
 
 const sidebarItems = [
   { label: 'Dashboard', icon: images.dash },
@@ -16,8 +19,27 @@ const sidebarItems = [
 const Home = () => {
   const navigate = useNavigate();
   const [selected, setSelected] = useState('Dashboard');
-  const [isCollapsed, setIsCollapsed] = useState(window.innerWidth > 650);
-  const handleClick = (label) => {
+  const refreshToken = useAuthStore((s) => s.refreshToken);
+  const logout = useAuthStore((s) => s.logout);
+  const [therapistProfile, setTherapistProfile] = useState(null);
+
+  useEffect(() => {
+    callApi({
+      method: Method.GET,
+      endPoint: api.therapistProfileMe,
+      onSuccess: (response) => {
+        const payload = response?.data ?? response;
+        const data = payload?.data ?? payload;
+        const me = data?.therapistProfile ?? data?.profile ?? data?.therapist ?? data;
+        setTherapistProfile(me);
+      },
+      onError: () => {
+        setTherapistProfile(null);
+      },
+    });
+  }, []);
+
+  const handleClick = async (label) => {
     setSelected(label);
     switch (label) {
       case 'Dashboard':
@@ -30,30 +52,31 @@ const Home = () => {
         navigate('track-attendance');
         break;
       case 'Session History':
-        navigate('session history');
+        navigate('session-history');
         break;
 
       case 'My Profile':
         navigate('my-profile');
         break;
       case 'Sign Out':
-        navigate('/');
+        await callApi({
+          method: Method.POST,
+          endPoint: api.logout,
+          bodyParams: { refreshToken },
+          onSuccess: () => {
+            logout();
+            navigate('/', { replace: true });
+          },
+          onError: () => {
+            logout();
+            navigate('/', { replace: true });
+          },
+        });
         break;
       default:
       // navigate('dashboard');
     }
   };
-  useEffect(() => {
-    setSelected('Dashboard');
-    navigate('dashboard');
-  }, [navigate]);
-  useEffect(() => {
-    const handleResize = () => {
-      setIsCollapsed(window.innerWidth > 650);
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
   return (
     <div className="flex min-h-screen">
       <aside className="w-[95px] sm:w-[230px] bg-white  p-6 fixed inset-y-0 left-0 flex flex-col">
@@ -78,13 +101,14 @@ const Home = () => {
 
       <main className="ml-[95px] sm:ml-[230px] p-6 flex-1 bg-slate-100 min-h-screen">
         <TopBar
+          profile={therapistProfile}
           onClick={() => {
             setSelected('My Profile');
             navigate('my-profile');
           }}
         />
         <div className="mt-6">
-          <Outlet />
+          <Outlet context={{ therapistProfile }} />
         </div>
       </main>
     </div>

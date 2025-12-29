@@ -1,99 +1,77 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Calendar, ChevronDown, Clock, X } from 'lucide-react';
-import { appointmentsData } from '../../components/Data';
+import { Method, callApi } from '../../netwrok/NetworkManager';
+import { api } from '../../netwrok/Environment';
 
 const SessionHistory = () => {
-  const [activeTab, setActiveTab] = useState('upcoming');
-  const [selectedSessionHistory, setSelectedSessionHistory] = useState(null);
-   const [isModalOpen, setIsModalOpen] = useState(false);
-   const [error, setError] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(new Date());
-    const [showCalendar, setShowCalendar] = useState(false);
-const [feedback, setFeedback] = useState('');
-  // Sample SessionHistorys data
+  const [type, setType] = useState('session');
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
+  const [entries, setEntries] = useState([]);
+  const [meta, setMeta] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [apiError, setApiError] = useState('');
+  const [selectedEntry, setSelectedEntry] = useState(null);
 
-  const formatDate = (date) => {
-    return date.toLocaleDateString('en-US', {
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric'
+  const endPoint = useMemo(() => {
+    const params = new URLSearchParams();
+    if (type) params.set('type', type);
+    params.set('page', String(page));
+    params.set('limit', String(limit));
+    return `${api.feedbackMe}?${params.toString()}`;
+  }, [limit, page, type]);
+
+  useEffect(() => {
+    let isActive = true;
+    setIsLoading(true);
+    setApiError('');
+
+    void callApi({
+      method: Method.GET,
+      endPoint,
+      onSuccess: (response) => {
+        if (!isActive) return;
+        setEntries(Array.isArray(response?.data) ? response.data : []);
+        setMeta(response?.meta ?? null);
+        setIsLoading(false);
+      },
+      onError: (err) => {
+        if (!isActive) return;
+        setApiError(err?.message || 'Failed to load session history.');
+        setEntries([]);
+        setMeta(null);
+        setIsLoading(false);
+      },
     });
-  };
 
-  const generateCalendar = () => {
-    const year = selectedDate.getFullYear();
-    const month = selectedDate.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const daysInMonth = lastDay.getDate();
-    const startingDayOfWeek = firstDay.getDay();
-  
-    const days = [];
-    
-    // Add empty cells for days before the first day of the month
-    for (let i = 0; i < startingDayOfWeek; i++) {
-      days.push(null);
-    }
-    
-    // Add days of the month
-    for (let day = 1; day <= daysInMonth; day++) {
-      days.push(day);
-    }
+    return () => {
+      isActive = false;
+    };
+  }, [endPoint]);
 
-    return days;
-  };
+  if (selectedEntry) {
+    const name =
+      selectedEntry?.user?.name ||
+      selectedEntry?.user?.fullName ||
+      selectedEntry?.user?.email ||
+      selectedEntry?.student?.name ||
+      selectedEntry?.client?.name ||
+      'Feedback';
+    const avatar =
+      selectedEntry?.user?.profileImage ||
+      selectedEntry?.user?.avatar ||
+      selectedEntry?.student?.avatar ||
+      selectedEntry?.client?.avatar ||
+      'https://i.pravatar.cc/120';
+    const createdAt = selectedEntry?.createdAt || selectedEntry?.date;
+    const time = selectedEntry?.time;
+    const content =
+      selectedEntry?.feedback ||
+      selectedEntry?.comment ||
+      selectedEntry?.message ||
+      selectedEntry?.text ||
+      '';
 
-  const handleDateSelect = (day) => {
-    if (day) {
-      const newDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), day);
-      setSelectedDate(newDate);
-      setShowCalendar(false);
-    }
-  };
-
-  const navigateMonth = (direction) => {
-    const newDate = new Date(selectedDate);
-    newDate.setMonth(newDate.getMonth() + direction);
-    setSelectedDate(newDate);
-  };
-
-
-
-
- 
-
-  const handleSessionHistoryClick = (SessionHistory) => {
-    setSelectedSessionHistory(SessionHistory);
-  };
-
-  const handleBackClick = () => {
-    setSelectedSessionHistory(null);
-  };
-
-  const handleTabChange = (tab) => {
-    setActiveTab(tab);
-    setSelectedSessionHistory(null);
-  };
-     const Modal = ({ onClose, children }) => {
-  return (
-    <div className="fixed inset-0 backdrop-blur-sm bg-black/10 flex items-center justify-center z-50"
-    onClick={() => setIsModalOpen(false)}>
-      <div className="bg-white shadow-lg rounded-lg max-w-md w-full mx-4 relative"
-      onClick={(e) => e.stopPropagation()}>
-        <button 
-          onClick={onClose}
-          className="absolute top-2 right-2 p-2 hover:bg-gray-100 rounded-full"
-        >
-          <X className="w-4 h-4" />
-        </button>
-        {children}
-      </div>
-    </div>
-  );
-   };
-  
-
-  if (selectedSessionHistory) {
     return (
       <>
       <div className="min-h-screen">
@@ -101,7 +79,7 @@ const [feedback, setFeedback] = useState('');
           <div className="bg-white rounded-lg shadow-sm p-6 md:p-8">
             {/* Back Button */}
             <button 
-              onClick={handleBackClick}
+              onClick={() => setSelectedEntry(null)}
               className="flex items-center text-gray-600 hover:text-gray-800 mb-6 transition-colors"
             >
               <ArrowLeft className="w-5 h-5 mr-2" />
@@ -111,45 +89,42 @@ const [feedback, setFeedback] = useState('');
             {/* Student Info */}
             <div className="flex items-center mb-8">
               <img 
-                src={selectedSessionHistory.avatar} 
-                alt={selectedSessionHistory.name}
+                src={avatar} 
+                alt={name}
                 className="w-16 h-16 rounded-full object-cover mr-4"
               />
-              <h1 className="text-2xl font-semibold text-gray-800">{selectedSessionHistory.name}</h1>
+              <h1 className="text-2xl font-semibold text-gray-800">{name}</h1>
             </div>
 
             {/* SessionHistory Details */}
-            <div className="mb-8">
-              <h2 className="text-lg font-bold text-gray-800 mb-1">Date & time</h2>
-              <div className="flex flex-wrap items-center gap-4 text-gray-600">
-                <div className="flex items-center">
-                  <Calendar className="w-5 h-5 mr-2" />
-                  <span>{selectedSessionHistory.date}</span>
-                </div>
-                <div className="flex items-center">
-                  <Clock className="w-5 h-5 mr-2" />
-                  <span>{selectedSessionHistory.time}</span>
+            {createdAt || time ? (
+              <div className="mb-8">
+                <h2 className="text-lg font-bold text-gray-800 mb-1">Date & time</h2>
+                <div className="flex flex-wrap items-center gap-4 text-gray-600">
+                  {createdAt ? (
+                    <div className="flex items-center">
+                      <Calendar className="w-5 h-5 mr-2" />
+                      <span>{String(createdAt)}</span>
+                    </div>
+                  ) : null}
+                  {time ? (
+                    <div className="flex items-center">
+                      <Clock className="w-5 h-5 mr-2" />
+                      <span>{String(time)}</span>
+                    </div>
+                  ) : null}
                 </div>
               </div>
-            </div>
+            ) : null}
 
-            {/* Mental Health Goals */}
-            <div className="mb-8">
-              <h2 className="text-lg font-bold text-gray-800 mb-1">Mental Health Goals</h2>
-              <p className="text-gray-600 leading-relaxed">{selectedSessionHistory.goals}</p>
-            </div>
-
-            {/* Note */}
-            <div className="mb-8">
-              <h2 className="text-lg font-bold text-gray-800 mb-1">Note</h2>
-              <p className="text-gray-600 leading-relaxed">{selectedSessionHistory.note}</p>
-            </div>
-
-            {/* AI Summary */}
-            <div>
-              <h2 className="text-lg font-bold text-gray-800 mb-1">Ai Summary</h2>
-              <p className="text-gray-600 leading-relaxed">{selectedSessionHistory.aiSummary}</p>
-            </div>
+            {content ? (
+              <div>
+                <h2 className="text-lg font-bold text-gray-800 mb-1">Feedback</h2>
+                <p className="text-gray-600 leading-relaxed whitespace-pre-wrap">{content}</p>
+              </div>
+            ) : (
+              <div className="text-gray-600">No feedback text.</div>
+            )}
               
           </div>
         </div>
@@ -165,37 +140,117 @@ const [feedback, setFeedback] = useState('');
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-8">
-          <h3 className="text-lg font-bold text-gray-800 mb-4 sm:mb-0">My Session Historys</h3>
+          <div>
+            <h3 className="text-lg font-bold text-gray-800 mb-2 sm:mb-0">Session History</h3>
+            {meta?.totalItems != null ? (
+              <p className="text-sm text-gray-500 mt-1">Total: {meta.totalItems}</p>
+            ) : null}
+          </div>
           
-          {/* Date Picker - Only show for Upcoming tab */}
-          
+          <div className="flex gap-2 items-center">
+            <button
+              type="button"
+              onClick={() => {
+                setPage(1);
+                setType('session');
+              }}
+              className={`px-5 py-2 rounded-full text-sm font-medium transition-colors ${
+                type === 'session' ? 'bg-teal-600 text-white' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+              }`}
+            >
+              Session
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setPage(1);
+                setType('gym');
+              }}
+              className={`px-5 py-2 rounded-full text-sm font-medium transition-colors ${
+                type === 'gym' ? 'bg-teal-600 text-white' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+              }`}
+            >
+              Gym
+            </button>
+            <select
+              value={limit}
+              onChange={(e) => {
+                setPage(1);
+                setLimit(Number(e.target.value) || 10);
+              }}
+              className="px-3 py-2 bg-white border border-gray-300 rounded-lg"
+            >
+              {[10, 20, 50].map((n) => (
+                <option key={n} value={n}>
+                  {n} / page
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
-        {/* Tab Navigation */}
-       
+        {apiError ? <div className="text-red-500 text-sm mb-6">{apiError}</div> : null}
 
         {/* SessionHistorys Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-          {appointmentsData.map((SessionHistory) => (
-            <div 
-              key={SessionHistory.id}
-              onClick={() => handleSessionHistoryClick(SessionHistory)}
-              className="bg-white rounded-2xl p-6 cursor-pointer  duration-200"
-            >
-              <div className="flex items-center">
-                <img 
-                  src={SessionHistory.avatar} 
-                  alt={SessionHistory.name}
-                  className="w-12 h-12 rounded-full object-cover mr-4"
-                />
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-1">{SessionHistory.name}</h3>
-                  <p className="text-sm text-gray-600">{SessionHistory.date} - {SessionHistory.time}</p>
+          {isLoading ? <div className="text-gray-600">Loading...</div> : null}
+          {!isLoading && entries.length === 0 ? <div className="text-gray-600">No results found.</div> : null}
+          {entries.map((entry, idx) => {
+            const person =
+              entry?.user ||
+              entry?.student ||
+              entry?.client ||
+              {};
+            const title = person?.name || person?.fullName || person?.email || 'Feedback';
+            const image = person?.profileImage || person?.avatar || 'https://i.pravatar.cc/120';
+            const subtitle = entry?.createdAt ? String(entry.createdAt) : '';
+            const key = entry?._id || entry?.id || `${subtitle || 'feedback'}-${idx}`;
+
+            return (
+              <div
+                key={key}
+                onClick={() => setSelectedEntry(entry)}
+                className="bg-white rounded-2xl p-6 cursor-pointer  duration-200"
+              >
+                <div className="flex items-center">
+                  <img
+                    src={image}
+                    alt={title}
+                    className="w-12 h-12 rounded-full object-cover mr-4"
+                  />
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-1">{title}</h3>
+                    {subtitle ? <p className="text-sm text-gray-600">{subtitle}</p> : null}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
+
+        {meta?.totalPages ? (
+          <div className="flex items-center justify-end gap-3 mt-8">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1 || isLoading}
+              className="px-4 py-2 bg-white border border-gray-300 rounded-lg disabled:opacity-50"
+            >
+              Prev
+            </button>
+            <span className="text-sm text-gray-600">
+              Page {page} / {meta.totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.min(meta.totalPages, p + 1))}
+              disabled={page >= meta.totalPages || isLoading}
+              className="px-4 py-2 bg-white border border-gray-300 rounded-lg disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
+        ) : null}
       </div>
     </div>
    

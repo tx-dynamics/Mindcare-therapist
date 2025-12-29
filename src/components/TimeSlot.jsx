@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Minus } from 'lucide-react';
 
-const TimeSlot = ({ onClick }) => {
+const TimeSlot = ({ onClick, onNext, isSubmitting = false }) => {
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
   const [selectedDays, setSelectedDays] = useState({
@@ -107,7 +107,35 @@ const TimeSlot = ({ onClick }) => {
   };
 
   const handleNext = () => {
-    if (validateFields()) {
+    if (isSubmitting) return;
+    if (!validateFields()) return;
+
+    const availability = Object.keys(selectedDays)
+      .filter((day) => selectedDays[day] && timeSlots[day])
+      .map((day) => {
+        const slots = [];
+        const slot1 = timeSlots[day]?.slot1;
+        if (slot1?.from && slot1?.to) {
+          slots.push({ from: slot1.from, to: slot1.to });
+        }
+
+        if (showExtraBoxes[day]) {
+          const slot2 = timeSlots[day]?.slot2;
+          if (slot2?.from && slot2?.to) {
+            slots.push({ from: slot2.from, to: slot2.to });
+          }
+        }
+
+        return { day: day.toLowerCase(), timeSlots: slots };
+      })
+      .filter((d) => d.timeSlots.length > 0);
+
+    if (typeof onNext === 'function') {
+      onNext(availability);
+      return;
+    }
+
+    if (typeof onClick === 'function') {
       onClick();
     }
   };
@@ -210,6 +238,7 @@ const TimeSlot = ({ onClick }) => {
         <div className="flex justify-end">
           <button
             onClick={handleNext}
+            disabled={isSubmitting}
             className="bg-teal-600 hover:bg-teal-700 text-white font-semibold py-3 px-8 rounded-lg transition-colors shadow-lg"
           >
             Next

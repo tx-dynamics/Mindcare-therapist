@@ -35,10 +35,14 @@ const CreatePasswordPage = () => {
   });
 
   return (
-    <AuthLayout title="Create Password">
-      <p className="text-center text-gray-500 mb-6">
-        Donec porta gravida rutrum. Etiam ultrices odio non dui facilisis, sollicitudin tincidunt
-      </p>
+    <AuthLayout
+      title="Create Password"
+      description={
+        flow === 'forgot_password'
+          ? 'Create a new password for your account.'
+          : 'Update your password by confirming your current password.'
+      }
+    >
       <Formik
         initialValues={{ oldPassword: '', password: '', confirmPassword: '' }}
         validationSchema={CreatePasswordSchema}
