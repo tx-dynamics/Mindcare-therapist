@@ -11,6 +11,7 @@ export const api = {
   appointmentsTherapists: 'appointments/therapists',
   therapistProfile: 'therapist/profile',
   therapistProfileMe: 'therapist/profile/me',
+  attendanceSummary: 'attendance/summary',
   feedbackMe: 'feedback/me',
   privacyPolicy: 'privacy-policy',
   termsAndConditions: 'terms-and-conditions',

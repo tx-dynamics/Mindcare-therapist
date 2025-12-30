@@ -1,27 +1,17 @@
-import React, { useState } from 'react';
-import { Calendar, ChevronDown, X } from 'lucide-react';
-import Home from '../AuthPages/Home';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Calendar, ChevronDown } from 'lucide-react';
+import { Method, callApi } from '../../netwrok/NetworkManager';
+import { api } from '../../netwrok/Environment';
 
 // Modal Component
 
 
-const TrackAttendence = ({onClose}) => {
+const TrackAttendence = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showCalendar, setShowCalendar] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedStudent, setSelectedStudent] = useState(null);
-  const [selectedStudents, setSelectedStudents] = useState(null);
-  // Sample student data
- const studentsData = [
-    { id: 1, name: "Name Here", gym: 40, home: 60, absent: 60 },
-    { id: 2, name: "Name Here", gym: 40, home: 60, absent: 60 },
-    { id: 3, name: "Name Here", gym: 40, home: 60, absent: 60 },
-    { id: 4, name: "Name Here", gym: 40, home: 60, absent: 60 },
-    { id: 5, name: "Name Here", gym: 40, home: 60, absent: 60 },
-    { id: 6, name: "Name Here", gym: 40, home: 60, absent: 60 },
-    { id: 7, name: "Name Here", gym: 40, home: 60, absent: 60 },
-    { id: 8, name: "Name Here", gym: 40, home: 60, absent: 60 },
-  ];
+  const [entries, setEntries] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [apiError, setApiError] = useState('');
 
   const formatDate = (date) => {
     return date.toLocaleDateString('en-US', {
@@ -30,6 +20,61 @@ const TrackAttendence = ({onClose}) => {
       year: 'numeric'
     });
   };
+
+  const formatPercent = (value) => {
+    const n = typeof value === 'number' ? value : Number(value);
+    if (!Number.isFinite(n)) return '-';
+    const rounded = Math.round(n * 10) / 10;
+    return `${rounded}%`;
+  };
+
+  const toYyyyMmDd = (date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
+  const range = useMemo(() => {
+    const end = new Date(selectedDate);
+    const start = new Date(selectedDate);
+    start.setDate(start.getDate() - 29);
+    return { startDate: toYyyyMmDd(start), endDate: toYyyyMmDd(end) };
+  }, [selectedDate]);
+
+  const endPoint = useMemo(() => {
+    const params = new URLSearchParams();
+    if (range.startDate) params.set('startDate', range.startDate);
+    if (range.endDate) params.set('endDate', range.endDate);
+    const query = params.toString();
+    return query ? `${api.attendanceSummary}?${query}` : api.attendanceSummary;
+  }, [range]);
+
+  useEffect(() => {
+    let isActive = true;
+    setIsLoading(true);
+    setApiError('');
+
+    void callApi({
+      method: Method.GET,
+      endPoint,
+      onSuccess: (response) => {
+        if (!isActive) return;
+        setEntries(Array.isArray(response?.data) ? response.data : []);
+        setIsLoading(false);
+      },
+      onError: (err) => {
+        if (!isActive) return;
+        setApiError(err?.message || 'Failed to load attendance summary.');
+        setEntries([]);
+        setIsLoading(false);
+      },
+    });
+
+    return () => {
+      isActive = false;
+    };
+  }, [endPoint]);
 
   const generateCalendar = () => {
     const year = selectedDate.getFullYear();
@@ -143,6 +188,9 @@ const TrackAttendence = ({onClose}) => {
             </div>
           </div>
 
+          {apiError ? <div className="text-red-500 text-sm mb-4">{apiError}</div> : null}
+          {isLoading ? <div className="text-gray-600 text-sm mb-4">Loading...</div> : null}
+
          
            {/* Attendance Table */}
         <div className="bg-white ">
@@ -158,29 +206,35 @@ const TrackAttendence = ({onClose}) => {
 
           {/* Table Body */}
           <div className="divide-y divide-gray-100">
-            {studentsData.map((student) => (
-              <div key={student.id} className="grid grid-cols-4 gap-4 p-6 items-center ">
+            {!isLoading && entries.length === 0 ? (
+              <div className="p-6 text-gray-600">No attendance data found.</div>
+            ) : null}
+            {entries.map((row, idx) => {
+              const key = row?.userId || row?._id || row?.id || `${row?.name || 'row'}-${idx}`;
+              const stats = row?.stats || {};
+              return (
+              <div key={key} className="grid grid-cols-4 gap-4 p-6 items-center ">
                 {/* Name */}
                 <div className="text-left">
-                  <p className="font-medium text-gray-700 text-lg">{student.name}</p>
-                </div>
-
-                {/* Gym */}
-                <div className="text-center">
-                  <span className="text-gray-600 text-lg">{student.gym}%</span>
-                </div>
-
-                {/* Home */}
-                <div className="text-center">
-                  <span className="text-gray-600 text-lg">{student.home}%</span>
+                  <p className="font-medium text-gray-700 text-lg">{row?.name || '-'}</p>
                 </div>
 
                 {/* Absent */}
                 <div className="text-center">
-                  <span className="text-gray-600 text-lg">{student.absent}%</span>
+                  <span className="text-gray-600 text-lg">{formatPercent(stats?.percentAbsent)}</span>
+                </div>
+
+                {/* Attend From Gym */}
+                <div className="text-center">
+                  <span className="text-gray-600 text-lg">{formatPercent(stats?.percentGym)}</span>
+                </div>
+
+                {/* Attend from Home */}
+                <div className="text-center">
+                  <span className="text-gray-600 text-lg">{formatPercent(stats?.percentHome)}</span>
                 </div>
               </div>
-            ))}
+            )})}
           </div>
         </div>
 
@@ -194,5 +248,3 @@ const TrackAttendence = ({onClose}) => {
 };
 
 export default TrackAttendence;
-
-

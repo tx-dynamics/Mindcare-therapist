@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
+import { Menu } from 'lucide-react';
 import images from '../assets/Images';
 import NotificationModal from './NotificationModal';
 
-const TopBar = ({ onClick, profile }) => {
+const TopBar = ({ onClick, onMenuClick, profile }) => {
   const [showModal, setShowModal] = useState(false);
 const [notifications, setNotifications] = useState([
     { id: 1, text: 'Notification received', time: 'Today | 09:24 AM', isNew: true },
@@ -34,10 +35,22 @@ const [notifications, setNotifications] = useState([
 
   return (
     <header className="w-full bg-white  px-6 py-3 rounded-[12px] mb-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
-        <div className="text-lg font-medium text-gray-800">{`Hi, ${firstName}`}</div>
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3 min-w-0">
+          {typeof onMenuClick === 'function' ? (
+            <button
+              type="button"
+              onClick={onMenuClick}
+              className="sm:hidden p-2 -ml-2 rounded-lg hover:bg-gray-100"
+              aria-label="Open menu"
+            >
+              <Menu className="w-5 h-5 text-gray-700" />
+            </button>
+          ) : null}
+          <div className="text-lg font-medium text-gray-800 truncate">{`Hi, ${firstName}`}</div>
+        </div>
 
-        <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto">
+        <div className="flex items-center justify-end gap-4 w-auto">
           <button
             onClick={onClick}
             className="flex items-center gap-3 min-w-0 flex-1 sm:flex-none"

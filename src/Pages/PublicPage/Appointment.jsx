@@ -8,12 +8,14 @@ const Appointment = () => {
    const [isModalOpen, setIsModalOpen] = useState(false);
    const [error, setError] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
-    const [showCalendar, setShowCalendar] = useState(false);
+  const [isDateSelected, setIsDateSelected] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
 const [feedback, setFeedback] = useState('');
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(10);
-  const [search, setSearch] = useState('');
-  const [specializations, setSpecializations] = useState('');
+  const [limit] = useState(30);
+  const [search] = useState('');
+  const [specializations] = useState('');
+  const [activeTab, setActiveTab] = useState('upcoming');
   const [therapists, setTherapists] = useState([]);
   const [meta, setMeta] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -39,8 +41,16 @@ const [feedback, setFeedback] = useState('');
       endPoint,
       onSuccess: (response) => {
         if (!isActive) return;
-        setTherapists(Array.isArray(response?.data) ? response.data : []);
-        setMeta(response?.meta ?? null);
+        const payload = response?.data ?? response;
+        const dataLayer = payload?.data ?? payload;
+        const list = Array.isArray(dataLayer?.data)
+          ? dataLayer.data
+          : Array.isArray(dataLayer)
+            ? dataLayer
+            : [];
+        const nextMeta = dataLayer?.meta ?? payload?.meta ?? null;
+        setTherapists(list);
+        setMeta(nextMeta);
         setIsLoading(false);
       },
       onError: (err) => {
@@ -63,6 +73,49 @@ const [feedback, setFeedback] = useState('');
       day: 'numeric',
       year: 'numeric'
     });
+  };
+
+  const formatCardDate = (date) => {
+    return date.toLocaleDateString('en-US', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    }).toUpperCase();
+  };
+
+  const formatTime12h = (time24) => {
+    if (!time24 || typeof time24 !== 'string') return '';
+    const [hRaw, mRaw] = time24.split(':');
+    const hours = Number(hRaw);
+    const minutes = Number(mRaw);
+    if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return '';
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const hour12 = hours % 12 === 0 ? 12 : hours % 12;
+    const mm = String(minutes).padStart(2, '0');
+    return `${hour12}:${mm} ${period}`;
+  };
+
+  const formatTimeRange12h = (from24, to24) => {
+    const from = formatTime12h(from24);
+    const to = formatTime12h(to24);
+    if (from && to) return `${from} - ${to}`;
+    return from || to || '';
+  };
+
+  const sanitizeImageUrl = (value) => {
+    if (!value) return '';
+    return String(value).replaceAll('`', '').replaceAll('"', '').trim();
+  };
+
+  const getFirstSlotForDate = (item, date) => {
+    const availability = Array.isArray(item?.availability) ? item.availability : [];
+    const weekday = date
+      .toLocaleDateString('en-US', { weekday: 'long' })
+      .toLowerCase();
+    const dayBlock = availability.find((d) => String(d?.day || '').toLowerCase() === weekday);
+    const slot = Array.isArray(dayBlock?.timeSlots) ? dayBlock.timeSlots[0] : null;
+    if (!slot?.from) return null;
+    return slot;
   };
 
   const generateCalendar = () => {
@@ -92,6 +145,7 @@ const [feedback, setFeedback] = useState('');
     if (day) {
       const newDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), day);
       setSelectedDate(newDate);
+      setIsDateSelected(true);
       setShowCalendar(false);
     }
   };
@@ -298,176 +352,162 @@ const [feedback, setFeedback] = useState('');
 
   return (
     <> 
-    <div className="min-h-screen ">
+    <div className="min-h-screen">
       <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-8">
+        <div className="flex items-start justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-800 mb-2 sm:mb-0">Appointments</h1>
-            {meta?.totalItems != null ? (
-              <p className="text-sm text-gray-500 mt-1">Total: {meta.totalItems}</p>
-            ) : null}
-          </div>
-
-          <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
-            <input
-              value={search}
-              onChange={(e) => {
-                setPage(1);
-                setSearch(e.target.value);
-              }}
-              placeholder="Search name or bio"
-              className="px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-            />
-            <input
-              value={specializations}
-              onChange={(e) => {
-                setPage(1);
-                setSpecializations(e.target.value);
-              }}
-              placeholder="specializations (comma separated)"
-              className="px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-            />
-          </div>
-
-          <div className="hidden">
-              <div className="relative">
+            <h1 className="text-xl font-semibold text-gray-900">My Appointments</h1>
+            <div className="flex items-center gap-3 mt-4">
               <button
-                onClick={() => setShowCalendar(!showCalendar)}
-                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 transition-colors"
+                type="button"
+                onClick={() => setActiveTab('upcoming')}
+                className={`px-4 py-2 rounded-full text-sm font-medium ${
+                  activeTab === 'upcoming' ? 'bg-teal-700 text-white' : 'bg-gray-200 text-gray-700'
+                }`}
               >
-               
-                <span className="text-gray-700">{formatDate(selectedDate)}</span>
-             <Calendar className="w-5 h-5 text-gray-500" />
+                Upcoming
               </button>
-
-              {/* Calendar Dropdown */}
-              {showCalendar && (
-                <div className="absolute right-0 top-full mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-10 p-4 w-80">
-                  {/* Calendar Header */}
-                  <div className="flex items-center justify-between mb-4">
-                    <button
-                      onClick={() => navigateMonth(-1)}
-                      className="p-1 hover:bg-gray-100 rounded"
-                    >
-                      <ChevronDown className="w-4 h-4 rotate-90" />
-                    </button>
-                    <h3 className="font-semibold">
-                      {selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                    </h3>
-                    <button
-                      onClick={() => navigateMonth(1)}
-                      className="p-1 hover:bg-gray-100 rounded"
-                    >
-                      <ChevronDown className="w-4 h-4 -rotate-90" />
-                    </button>
-                  </div>
-
-                  {/* Calendar Grid */}
-                  <div className="grid grid-cols-7 gap-1 mb-2">
-                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                      <div key={day} className="text-center text-xs font-medium text-gray-500 py-2">
-                        {day}
-                      </div>
-                    ))}
-                  </div>
-                  
-                  <div className="grid grid-cols-7 gap-1">
-                    {generateCalendar().map((day, index) => (
-                      <button
-                        key={index}
-                        onClick={() => handleDateSelect(day)}
-                        className={`h-8 text-sm rounded hover:bg-teal-100 transition-colors ${
-                          day === selectedDate.getDate() ? 'bg-teal-600 text-white hover:bg-teal-700' : 
-                          day ? 'text-gray-700 hover:bg-gray-100' : ''
-                        }`}
-                        disabled={!day}
-                      >
-                        {day}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
+              <button
+                type="button"
+                onClick={() => setActiveTab('completed')}
+                className={`px-4 py-2 rounded-full text-sm font-medium ${
+                  activeTab === 'completed' ? 'bg-teal-700 text-white' : 'bg-gray-200 text-gray-700'
+                }`}
+              >
+                Completed
+              </button>
             </div>
+          </div>
+
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowCalendar(!showCalendar)}
+              className="w-56 flex items-center justify-between gap-3 px-4 py-3 bg-white rounded-xl shadow-sm border border-gray-200 hover:bg-gray-50 transition-colors"
+            >
+              <span className="text-sm text-gray-700">
+                {isDateSelected ? formatDate(selectedDate) : 'Select Date'}
+              </span>
+              <Calendar className="w-5 h-5 text-gray-500" />
+            </button>
+
+            {showCalendar && (
+              <div className="absolute right-0 top-full mt-2 bg-white border border-gray-200 rounded-xl shadow-lg z-10 p-4 w-80">
+                <div className="flex items-center justify-between mb-4">
+                  <button
+                    type="button"
+                    onClick={() => navigateMonth(-1)}
+                    className="p-1 hover:bg-gray-100 rounded"
+                  >
+                    <ChevronDown className="w-4 h-4 rotate-90" />
+                  </button>
+                  <h3 className="font-semibold">
+                    {selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => navigateMonth(1)}
+                    className="p-1 hover:bg-gray-100 rounded"
+                  >
+                    <ChevronDown className="w-4 h-4 -rotate-90" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-7 gap-1 mb-2">
+                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+                    <div key={day} className="text-center text-xs font-medium text-gray-500 py-2">
+                      {day}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-7 gap-1">
+                  {generateCalendar().map((day, index) => (
+                    <button
+                      type="button"
+                      key={index}
+                      onClick={() => handleDateSelect(day)}
+                      className={`h-8 text-sm rounded hover:bg-teal-100 transition-colors ${
+                        day === selectedDate.getDate()
+                          ? 'bg-teal-600 text-white hover:bg-teal-700'
+                          : day
+                            ? 'text-gray-700 hover:bg-gray-100'
+                            : ''
+                      }`}
+                      disabled={!day}
+                    >
+                      {day}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
         {apiError ? <div className="text-red-500 text-sm mb-6">{apiError}</div> : null}
 
-        {/* Appointments Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-          {isLoading ? (
-            <div className="text-gray-600">Loading...</div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {isLoading ? <div className="text-gray-600">Loading...</div> : null}
+          {!isLoading && (activeTab === 'completed' || therapists.length === 0) ? (
+            <div className="text-gray-600">No appointments found.</div>
           ) : null}
-          {!isLoading && therapists.length === 0 ? (
-            <div className="text-gray-600">No results found.</div>
-          ) : null}
-          {therapists.map((therapist, idx) => {
-            const title =
-              therapist?.name || therapist?.fullName || therapist?.user?.name || therapist?.user?.email || 'Therapist';
-            const image = therapist?.profileImage || therapist?.avatar || therapist?.photo || 'https://i.pravatar.cc/120';
-            const subtitle = therapist?.location || therapist?.bio || '';
-            const key = therapist?._id || therapist?.id || therapist?.user?._id || `${therapist?.name || 'therapist'}-${idx}`;
+          {activeTab === 'upcoming'
+            ? therapists.map((therapist, idx) => {
+                const title =
+                  therapist?.name ||
+                  therapist?.fullName ||
+                  therapist?.user?.name ||
+                  therapist?.user?.email ||
+                  'Student Name';
+                const image =
+                  sanitizeImageUrl(therapist?.profileImage) ||
+                  therapist?.avatar ||
+                  therapist?.photo ||
+                  'https://i.pravatar.cc/120';
+                const key =
+                  therapist?._id ||
+                  therapist?.id ||
+                  therapist?.user?._id ||
+                  `${therapist?.name || 'therapist'}-${idx}`;
 
-            return (
-              <div
-                key={key}
-                onClick={() => handleAppointmentClick(therapist)}
-                className="bg-white rounded-3xl  p-6 cursor-pointer  duration-200"
-              >
-                <div className="flex items-center">
-                  <img
-                    src={image}
-                    alt={title}
-                    className="w-12 h-12 rounded-full object-cover mr-4"
-                  />
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-1">{title}</h3>
-                    {subtitle ? <p className="text-sm text-gray-600 line-clamp-2">{subtitle}</p> : null}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+                const dateForCard = isDateSelected ? selectedDate : new Date();
+                const slot = getFirstSlotForDate(therapist, dateForCard);
+                const timeLabel =
+                  slot?.from || slot?.to ? formatTimeRange12h(slot?.from, slot?.to) : '';
+                const metaLine = timeLabel
+                  ? `${formatCardDate(dateForCard)} · ${timeLabel}`
+                  : `${formatCardDate(dateForCard)}`;
+
+                return (
+                  <button
+                    type="button"
+                    key={key}
+                    onClick={() =>
+                      handleAppointmentClick({
+                        ...therapist,
+                        profileImage: image,
+                        date: formatDate(dateForCard),
+                        time: timeLabel,
+                      })
+                    }
+                    className="bg-white rounded-2xl px-5 py-4 shadow-sm hover:shadow-md transition-shadow text-left"
+                  >
+                    <div className="flex items-center gap-4">
+                      <img
+                        src={image}
+                        alt={title}
+                        className="w-14 h-14 rounded-full object-cover"
+                      />
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-gray-900 truncate">{title}</div>
+                        <div className="text-xs text-gray-500 mt-1">{metaLine}</div>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })
+            : null}
         </div>
-
-        {meta?.totalPages ? (
-          <div className="flex items-center justify-end gap-3 mt-8">
-            <button
-              type="button"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page <= 1 || isLoading}
-              className="px-4 py-2 bg-white border border-gray-300 rounded-lg disabled:opacity-50"
-            >
-              Prev
-            </button>
-            <span className="text-sm text-gray-600">
-              Page {page} / {meta.totalPages}
-            </span>
-            <button
-              type="button"
-              onClick={() => setPage((p) => Math.min(meta.totalPages, p + 1))}
-              disabled={page >= meta.totalPages || isLoading}
-              className="px-4 py-2 bg-white border border-gray-300 rounded-lg disabled:opacity-50"
-            >
-              Next
-            </button>
-            <select
-              value={limit}
-              onChange={(e) => {
-                setPage(1);
-                setLimit(Number(e.target.value) || 10);
-              }}
-              className="px-3 py-2 bg-white border border-gray-300 rounded-lg"
-            >
-              {[5, 10, 20, 50].map((n) => (
-                <option key={n} value={n}>
-                  {n} / page
-                </option>
-              ))}
-            </select>
-          </div>
-        ) : null}
       </div>
     </div>
    
