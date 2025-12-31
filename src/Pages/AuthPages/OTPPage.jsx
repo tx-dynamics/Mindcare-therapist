@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Method, callApi } from '../../netwrok/NetworkManager';
 import { api } from '../../netwrok/Environment';
-const OTPPage = () => {
+  const OTPPage = () => {
      const [otp, setOtp] = useState(['', '', '', '','','']);
+     const [isWide, setIsWide] = useState(typeof window !== 'undefined' ? window.innerWidth > 380 : false);
      const location = useLocation();
      const email = location?.state?.email;
      const otpCooldown = location?.state?.otpCooldown;
@@ -13,7 +14,6 @@ const OTPPage = () => {
      const [seconds, setSeconds] = useState(
       typeof otpCooldown === 'number' ? otpCooldown : 60
      );
-     const [apiError, setApiError] = useState('');
      const [isSubmitting, setIsSubmitting] = useState(false);
      const navigate =useNavigate();
       useEffect(() => {
@@ -24,7 +24,13 @@ const OTPPage = () => {
       }, 1000);
       return () => clearTimeout(timer);
     }
-  }, [seconds]);
+   }, [seconds]);
+  useEffect(() => {
+    const onResize = () => setIsWide(window.innerWidth > 380);
+    onResize();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 //   useFocusEffect(
 //   useCallback(() => {
 //     setOtp(""); // Clea return () => {}; // No cleanup needed
@@ -50,16 +56,15 @@ const OTPPage = () => {
   }
 
   const handleVerify = async () => {
-    setApiError('');
     const otpValue = otp.join('');
 
     if (!email) {
-      setApiError('Email is missing. Please restart the reset flow.');
+      // Show toaster error
       return;
     }
 
     if (otpValue.length !== 6) {
-      setApiError('Please enter the 6-digit OTP.');
+      // Show toaster error
       return;
     }
 
@@ -72,8 +77,8 @@ const OTPPage = () => {
         onSuccess: () => {
           navigate('/create-password', { state: { email, flow } });
         },
-        onError: (error) => {
-          setApiError(error?.message || 'Invalid or expired OTP.');
+        onError: () => {
+          // Handled by global toaster
         },
       });
       setIsSubmitting(false);
@@ -88,20 +93,21 @@ const OTPPage = () => {
       title="OTP"
       description={email ? `Enter the 6-digit code sent to ${email}.` : 'Enter the 6-digit code to continue.'}
     >
-     <div className="flex justify-between mb-3">
+     <div className="w-full max-w-[420px] mx-auto px-2 sm:px-0">
+      <div className={`grid ${isWide ? 'grid-cols-6' : 'grid-cols-4'} gap-2 sm:gap-3 md:gap-4 justify-items-center mb-3`}>
         {otp.map((digit, index) => (
           <input
             key={index}
             id={`otp-${index}`}
             type="text"
             maxLength={1}
-           value={digit}
-           onChange={(e) => handleChange(e.target.value, index)}
-            className=" mb-2 w-14 h-14 text-center text-2xl font-medium border border-[#A1B0CC] border-[1px] rounded-[15px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+            value={digit}
+            onChange={(e) => handleChange(e.target.value, index)}
+            className={`mb-2 w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 text-center text-xl sm:text-2xl font-medium border border-[#A1B0CC] border-[1px] rounded-[15px] focus:outline-none focus:ring-2 focus:ring-blue-500 ${!isWide && index === 4 ? 'col-start-2' : ''} ${!isWide && index === 5 ? 'col-start-3' : ''}`}
           />
         ))}
       </div>
-      {apiError ? <div className="text-red-500 text-sm mb-2">{apiError}</div> : null}
+     </div>
 <div className=" mb-6 mt-6">
  <p className="text-center text-lg text-teal-700 mb-2 mt=12">
             {formatTime(seconds)}
@@ -128,10 +134,6 @@ const OTPPage = () => {
 };
 
 export default OTPPage;
-
-
-
-
 
 
 

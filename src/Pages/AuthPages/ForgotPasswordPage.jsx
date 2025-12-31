@@ -13,7 +13,6 @@ const ForgotPasswordSchema = Yup.object().shape({
 });
 export default function ForgotPasswordPage() {
   const navigate = useNavigate();
-  const [apiError, setApiError] = useState('');
   return (
     <AuthLayout
       title="Forgot Password"
@@ -23,8 +22,6 @@ export default function ForgotPasswordPage() {
         initialValues={{ email: '' }}
         validationSchema={ForgotPasswordSchema}
         onSubmit={async (values, { setSubmitting }) => {
-          setApiError('');
-
           await callApi({
             method: Method.POST,
             endPoint: api.forgotPassword,
@@ -44,7 +41,7 @@ export default function ForgotPasswordPage() {
               navigate('/OTPPage', { state: { email: values.email, flow: 'forgot_password' } });
             },
             onError: (error) => {
-              setApiError(error?.message || 'Failed to send OTP. Please try again.');
+              // Handled by global toaster
             },
           });
 
@@ -58,11 +55,10 @@ export default function ForgotPasswordPage() {
                 name="email"
                 type="email"
                 placeholder="Enter Your Mail"
-                className="w-full px-4 py-3 border border-[#A1B0CC] rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 mb-4"
+                className="w-full px-4 py-3 border border-[#A1B0CC] rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 "
               />
-              <ErrorMessage name="email" component="div" className="text-red-500 text-sm mt-1 " />
+              <ErrorMessage name="email" component="div" className="text-red-500 text-sm mt-0 " />
             </div>
-            {apiError ? <div className="text-red-500 text-sm">{apiError}</div> : null}
             <PrimaryButton
               type="submit"
               className={`${isSubmitting ? 'opacity-70 pointer-events-none' : ''} mt-6`}

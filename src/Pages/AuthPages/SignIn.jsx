@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Form, Formik } from 'formik';
 import { useNavigate } from 'react-router-dom';
 import * as Yup from 'yup';
+import { Eye, EyeOff } from 'lucide-react';
 import PrimaryButton from '../../components/PrimaryButton';
 import CustomInput from '../../components/CustomInput';
 import AuthLayout from '../../layout/AuthLayout';
@@ -10,7 +11,7 @@ import { api } from '../../netwrok/Environment';
 import { useAuthStore } from '../../store/authSlice';
 
 export default function SignIn() {
-  const [apiError, setApiError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const setToken = useAuthStore((s) => s.setToken);
   const setRefreshToken = useAuthStore((s) => s.setRefreshToken);
   const setUserData = useAuthStore((s) => s.setUserData);
@@ -37,8 +38,6 @@ export default function SignIn() {
         initialValues={{ email: '', password: '' }}
         validationSchema={loginValidationSchema}
         onSubmit={async (values, { setSubmitting }) => {
-          setApiError('');
-
           await callApi({
             method: Method.POST,
             endPoint: api.signIn,
@@ -68,18 +67,36 @@ export default function SignIn() {
               navigate('/create-profile');
             },
             onError: (error) => {
-              setApiError(error?.message || 'Sign in failed. Please try again.');
+              // Handled by global toaster
             },
           });
 
           setSubmitting(false);
         }}
       >
-        {({ isSubmitting }) => (
+        {({ isSubmitting, values, errors, handleChange }) => (
           <Form className="space-y-4">
-            <CustomInput name="email" type="email" placeholder="Enter Your Mail" />
-            <CustomInput name="password" type="password" placeholder="Enter Your Password" />
-            {apiError ? <div className="text-red-500 text-sm">{apiError}</div> : null}
+            <CustomInput
+              name="email"
+              type="email"
+              placeholder="Enter Your Mail"
+              onChange={handleChange}
+            />
+            <CustomInput
+              name="password"
+              type={showPassword ? 'text' : 'password'}
+              placeholder="Enter Your Password"
+              onChange={handleChange}
+              suffix={
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="flex items-center justify-center h-full"
+                >
+                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              }
+            />
             <div className="flex justify-end">
               <button 
                 onClick={handleForgotPassword}

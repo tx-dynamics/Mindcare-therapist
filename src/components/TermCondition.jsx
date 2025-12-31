@@ -66,7 +66,7 @@ const TermCondition = () => {
 
   return (
     <div className="prose max-w-none text-sm text-gray-700 px-4 py-6">
-      <h2 className="text-center text-lg font-semibold mb-4">Term & Condition</h2>
+      <h2 className="text-center text-lg font-semibold mb-4">Terms & Condition</h2>
       {isLoading && <p className="text-[#92979D]">Loading...</p>}
       {!isLoading && apiError && <p className="text-red-500">{apiError}</p>}
       {terms.map((term, idx) => (

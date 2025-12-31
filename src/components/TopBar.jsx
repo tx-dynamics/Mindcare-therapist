@@ -5,7 +5,7 @@ import NotificationModal from './NotificationModal';
 
 const TopBar = ({ onClick, onMenuClick, profile }) => {
   const [showModal, setShowModal] = useState(false);
-const [notifications, setNotifications] = useState([
+  const [notifications, setNotifications] = useState([
     { id: 1, text: 'Notification received', time: 'Today | 09:24 AM', isNew: true },
     { id: 2, text: 'New message from John', time: 'Today | 08:15 AM', isNew: true },
     { id: 3, text: 'System update completed', time: 'Today | 07:30 AM', isNew: true },
@@ -34,9 +34,10 @@ const [notifications, setNotifications] = useState([
     'https://i.pravatar.cc/40';
 
   return (
-    <header className="w-full bg-white  px-6 py-3 rounded-[12px] mb-6">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3 min-w-0">
+    <header className="w-full bg-white px-4 py-2 sm:px-6 sm:py-3 rounded-[12px] mb-4 sm:mb-6">
+      <div className="flex flex-wrap sm:flex-nowrap items-center sm:gap-4">
+        {/* Left Section (Menu + Welcome) */}
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 order-1">
           {typeof onMenuClick === 'function' ? (
             <button
               type="button"
@@ -47,39 +48,44 @@ const [notifications, setNotifications] = useState([
               <Menu className="w-5 h-5 text-gray-700" />
             </button>
           ) : null}
-          <div className="text-lg font-medium text-gray-800 truncate">{`Hi, ${firstName}`}</div>
+          <div className="text-lg font-medium text-gray-800 truncate hidden sm:block">{`Hi, ${firstName}`}</div>
         </div>
 
-        <div className="flex items-center justify-end gap-4 w-auto">
-          <button
-            onClick={onClick}
-            className="flex items-center gap-3 min-w-0 flex-1 sm:flex-none"
-            type="button"
-          >
-            <img
-              src={avatar}
-              className="w-10 h-10 rounded-full"
-              alt="User Avatar"
-            />
-            <div className="flex flex-col justify-center min-w-0 max-w-[180px] sm:max-w-none">
-              <p className="text-sm font-medium text-gray-900 truncate">{displayName}</p>
-              <p className="text-xs text-green-600 truncate">{role}</p>
-            </div>
-          </button>
+        {/* Profile Section - Mobile: Order 3 (New Line), Desktop: Order 2 (Right aligned) */}
+        <button
+          onClick={onClick}
+          className="flex items-center justify-center sm:justify-start gap-2 sm:gap-3 min-w-0 order-3 w-full sm:w-auto mt-2 sm:mt-0 sm:order-2 sm:ml-auto"
+          type="button"
+        >
+          <img
+            src={avatar}
+            className="w-8 h-8 sm:w-10 sm:h-10 rounded-full"
+            alt="User Avatar"
+            onError={(e) => { e.currentTarget.src = 'https://i.pravatar.cc/40'; }}
+          />
+          <div className="flex flex-col justify-center min-w-0 max-w-[200px] sm:max-w-none text-left">
+            <p className="text-sm font-medium text-gray-900 truncate">{displayName}</p>
+            <p className="text-xs text-green-600 truncate">{role}</p>
+          </div>
+        </button>
 
-          <button onClick={() => setShowModal(true)} type="button">
-            <div className="relative">
-              <img src={images.notify} className="w-10 h-8" alt="Notify" />
-              {unreadCount > 0 && (
-                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
-                  {unreadCount}
-                </span>
-              )}
-            </div>
-          </button>
-        </div>
+        {/* Notification Section - Mobile: Order 2 (Right aligned on first line), Desktop: Order 3 */}
+        <button
+          onClick={() => setShowModal(true)}
+          type="button"
+          className="order-2 sm:order-3 ml-auto sm:ml-4"
+        >
+          <div className="relative">
+            <img src={images.notify} className="w-8 h-6 sm:w-10 sm:h-8" alt="Notify" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] sm:text-xs font-bold rounded-full h-4 w-4 sm:h-5 sm:w-5 flex items-center justify-center">
+                {unreadCount}
+              </span>
+            )}
+          </div>
+        </button>
       </div>
-       <NotificationModal
+      <NotificationModal
         isOpen={showModal}
         onClose={() => setShowModal(false)}
         notifications={notifications}

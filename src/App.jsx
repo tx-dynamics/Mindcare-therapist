@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import {
   SignIn,
@@ -17,6 +17,7 @@ import {
 export default function App() {
   return (
     <BrowserRouter>
+      <ToastHost />
       <ScrollToTop />
       <Routes>
         {/* Public Routes */}
@@ -49,4 +50,44 @@ function ScrollToTop() {
   }, [pathname]);
 
   return null;
+}
+
+function ToastHost() {
+  const [toasts, setToasts] = useState([]);
+
+  useEffect(() => {
+    const show = (message, type = "error") => {
+      if (!message) return;
+      const id = `${Date.now()}-${Math.random()}`;
+      const toast = { id, message: String(message), type };
+      setToasts((prev) => [...prev, toast]);
+      setTimeout(() => {
+        setToasts((prev) => prev.filter((t) => t.id !== id));
+      }, 4000);
+    };
+    window.showToast = show;
+    return () => {
+      delete window.showToast;
+    };
+  }, []);
+
+  const color = (type) =>
+    type === "success"
+      ? "bg-teal-700"
+      : type === "warning"
+        ? "bg-yellow-600"
+        : "bg-red-600";
+
+  return (
+    <div className="fixed top-4 right-4 z-[1000] space-y-2">
+      {toasts.map((t) => (
+        <div
+          key={t.id}
+          className={`text-white ${color(t.type)} px-4 py-3 rounded-lg shadow-lg max-w-xs`}
+        >
+          {t.message}
+        </div>
+      ))}
+    </div>
+  );
 }

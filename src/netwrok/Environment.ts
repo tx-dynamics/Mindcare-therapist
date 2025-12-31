@@ -17,4 +17,6 @@ export const api = {
   termsAndConditions: 'terms-and-conditions',
   workouts: 'workouts',
   s3Upload: 's3/upload',
+  availability: 'therapist/profile/availability',
+  appointmentsMe: 'appointments/me',
 }

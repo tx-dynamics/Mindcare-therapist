@@ -170,7 +170,7 @@ const Home = () => {
         </div>
       </aside>
 
-      <main className="ml-0 sm:ml-[230px] p-6 flex-1 bg-slate-100 min-h-screen">
+      <main className="ml-0 sm:ml-[230px] p-6 flex-1 bg-slate-100 min-h-screen overflow-x-hidden">
         <TopBar
           profile={therapistProfile}
           onMenuClick={() => setIsMobileMenuOpen(true)}

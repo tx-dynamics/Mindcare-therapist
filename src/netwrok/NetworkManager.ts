@@ -40,6 +40,22 @@ interface ApiCallParams {
   headers?: Record<string, string>;
 }
 
+declare global {
+  interface Window {
+    showToast?: (message: string, type?: "error" | "success" | "warning") => void;
+  }
+}
+
+const showToast = (message?: string, type: "error" | "success" | "warning" = "error") => {
+  if (!message) return;
+  try {
+    const fn = (window as any).showToast;
+    if (typeof fn === "function") {
+      fn(String(message), type);
+    }
+  } catch {}
+};
+
 // Configure axios defaults
 const axiosInstance = axios.create({
   baseURL: BASE_URL,
@@ -81,6 +97,7 @@ const refreshAccessToken = async (
 
 const handleAuthenticationError = (logout: () => void, message: string) => {
   console.warn("Auth Error:", message);
+  showToast(message || "Authentication failed. Please login again.");
   logout();
 };
 
@@ -165,6 +182,7 @@ export const callApi = async ({
       } else if (responseData?.message) {
         console.error("API Error Message:", responseData.message);
       }
+      showToast(responseData?.message || "Request failed. Please try again.");
     }
   } catch (error) {
     console.error("API Call Failed:", {
@@ -191,7 +209,8 @@ export const callApi = async ({
             message.includes("invalid credentials") ||
             serverError?.errorType === "INVALID_PASSWORD")
         ) {
-          onError && onError({ message: "Incorrect password. Please try again." });
+          onError && onError({ message: "Invalid credentials" });
+          showToast("Invalid credentials");
           return;
         }
 
@@ -228,6 +247,7 @@ export const callApi = async ({
           (message.includes("old password") || message.includes("incorrect"))
         ) {
           onError && onError(serverError);
+          showToast(serverError?.message || "Failed to update password. Please try again.");
           return;
         }
 
@@ -250,7 +270,8 @@ export const callApi = async ({
           message.includes("invalid credentials") ||
           serverError?.errorType === "INVALID_PASSWORD"
         ) {
-          onError && onError({ message: "Incorrect password. Please try again." });
+          onError && onError({ message: "Invalid credentials" });
+          showToast("Invalid credentials");
           return;
         }
 
@@ -259,21 +280,24 @@ export const callApi = async ({
           message.includes("user not found") ||
           serverError?.errorType === "USER_NOT_FOUND"
         ) {
-          const identifier = String(bodyParams?.identifier ?? "").trim();
-          const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier);
-          const isPhone = /^\+?[0-9]{7,15}$/.test(identifier);
           const isSignin = endPoint.includes("auth/signin");
+          const password = String(bodyParams?.password ?? "");
+          const isStrongPassword = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#\$%\^&\*]).{8,}$/.test(password);
 
-          if (isSignin && isEmail) {
-            onError && onError({ message: "Email not found. Please sign up first." });
-            return;
-          }
-          if (isSignin && isPhone) {
-            onError && onError({ message: "Phone number not found. Please sign up first." });
-            return;
+          if (isSignin) {
+            if (isStrongPassword) {
+              onError && onError({ message: "Invalid credentials" });
+              showToast("Invalid credentials");
+              return;
+            } else {
+              onError && onError({ message: "User not found" });
+              showToast("User not found");
+              return;
+            }
           }
 
-          onError && onError({ message: "User not found. Please sign up first." });
+          onError && onError({ message: "User not found" });
+          showToast("User not found");
           return;
         }
       }
@@ -281,6 +305,7 @@ export const callApi = async ({
       if (axiosError.code === "ECONNABORTED") {
         onError &&
           onError({ message: "Request timed out. Please try again." });
+        showToast("Request timed out. Please try again.");
       } else if (
         axiosError.code === "NETWORK_ERROR" ||
         axiosError.message.includes("Network Error")
@@ -290,14 +315,18 @@ export const callApi = async ({
             message:
               "Network connection failed. Please check your internet connection.",
           });
+        showToast("Network connection failed. Please check your internet connection.");
       } else if (axiosError.response) {
         const serverError = axiosError.response.data as ApiResponse;
         onError && onError(serverError);
+        showToast(serverError?.message || "Request failed. Please try again.");
       } else {
         onError && onError({ message: "Request failed. Please try again." });
+        showToast("Request failed. Please try again.");
       }
     } else {
       onError && onError({ message: "An unexpected error occurred." });
+      showToast("An unexpected error occurred.");
     }
   }
 };

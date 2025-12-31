@@ -12,7 +12,6 @@ const CreatePasswordPage = () => {
   const [showOldPassword, setShowOldPassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  const [apiError, setApiError] = useState('');
   const navigate = useNavigate();
   const location = useLocation();
   const email = location?.state?.email;
@@ -47,11 +46,9 @@ const CreatePasswordPage = () => {
         initialValues={{ oldPassword: '', password: '', confirmPassword: '' }}
         validationSchema={CreatePasswordSchema}
         onSubmit={async (values, { setSubmitting }) => {
-          setApiError('');
-
           if (flow === 'forgot_password') {
             if (!email) {
-              setApiError('Email is missing. Please restart the reset flow.');
+              // Show toaster
               setSubmitting(false);
               return;
             }
@@ -66,8 +63,8 @@ const CreatePasswordPage = () => {
               onSuccess: () => {
                 navigate('/');
               },
-              onError: (error) => {
-                setApiError(error?.message || 'Failed to reset password. Please try again.');
+              onError: () => {
+                // Handled by global toaster
               },
             });
 
@@ -76,7 +73,7 @@ const CreatePasswordPage = () => {
           }
 
           if (!token) {
-            setApiError('You are not signed in. Please sign in again.');
+            // Show toaster
             setSubmitting(false);
             return;
           }
@@ -91,8 +88,8 @@ const CreatePasswordPage = () => {
             onSuccess: () => {
               navigate('/');
             },
-            onError: (error) => {
-              setApiError(error?.message || 'Failed to update password. Please try again.');
+            onError: () => {
+              // Handled by global toaster
             },
           });
 
@@ -160,7 +157,6 @@ const CreatePasswordPage = () => {
               <ErrorMessage name="confirmPassword" component="div" className="text-red-500 text-sm mt-1 " />
             </div>
 
-            {apiError ? <div className="text-red-500 text-sm">{apiError}</div> : null}
             <PrimaryButton type="submit" className={isSubmitting ? 'opacity-70 pointer-events-none' : ''}>
               UPDATE PASSWORD
             </PrimaryButton>

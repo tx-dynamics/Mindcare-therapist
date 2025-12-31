@@ -6,6 +6,9 @@ import ChangePassword from '../../components/ChangePassword';
 import TermsConditions from '../../components/TermCondition';
 import PrivacyPolicy from '../../components/PrivacyPolicy';
 
+import { Method, callApi } from '../../netwrok/NetworkManager';
+import { api } from '../../netwrok/Environment';
+
 const MyProfile = () => {
   const [selectedSection, setSelectedSection] = useState('editProfile');
   const { therapistProfile } = useOutletContext() || {};
@@ -30,11 +33,11 @@ const MyProfile = () => {
   };
 
   return (
-    <div className="min-h-screen  flex flex-col md:flex-row  gap-4">
-      <div className="w-full md:w-1/3 lg:w-1/4 space-y-4">
+    <div className="min-h-screen flex flex-col md:flex-row gap-4 md:gap-6 max-[450px]:gap-3 max-[450px]:overflow-x-hidden">
+      <div className="w-full md:w-1/3 lg:w-1/4 space-y-4 px-4 md:px-0 max-[450px]:px-2 max-[450px]:space-y-3">
         <MenuItem
           label="Edit Profile"
-          subtitle="Details about your Personal Information"
+          subtitle="Details about your Personal Info"
           active={selectedSection === 'editProfile'}
           onClick={() => setSelectedSection('editProfile')}
         />
@@ -70,7 +73,7 @@ const MyProfile = () => {
           onClick={() => setSelectedSection('privacy')}
         />
       </div>
-      <div className="w-full md:flex-1  bg-white rounded-xl shadow-md p-4 self-start">
+      <div className="w-full md:flex-1 bg-white rounded-xl shadow-md p-3 sm:p-4 md:p-6 self-start mx-4 md:mx-0 max-[450px]:mx-2 max-[450px]:p-3">
         {renderContent()}
       </div>
     </div>
@@ -80,13 +83,12 @@ const MyProfile = () => {
 const MenuItem = ({ label, subtitle, onClick, active }) => (
   <div
     onClick={onClick}
-    className={`cursor-pointer p-4 rounded-xl shadow-sm border flex justify-between items-center ${
-      active ? 'border-teal-700' : 'border-gray-100'
-    } bg-white hover:bg-gray-50 transition`}
+    className={`cursor-pointer p-4 max-[450px]:p-3 rounded-xl shadow-sm border flex justify-between items-center w-full ${active ? 'border-teal-700' : 'border-gray-100'
+      } bg-white hover:bg-gray-50 transition`}
   >
     <div>
-      <div className="font-semibold text-black">{label}</div>
-      {subtitle ? <div className="text-xs text-gray-500 mt-1">{subtitle}</div> : null}
+      <div className="font-semibold text-black max-[450px]:text-sm">{label}</div>
+      {subtitle ? <div className="text-xs text-gray-500 mt-1 max-[450px]:text-[11px]">{subtitle}</div> : null}
     </div>
     <ChevronRight className="w-4 h-4 text-gray-500" />
   </div>
@@ -95,15 +97,15 @@ const MenuItem = ({ label, subtitle, onClick, active }) => (
 const ToggleItem = ({ label }) => {
   const [enabled, setEnabled] = useState(true);
   return (
-    <div className="flex items-center justify-between p-4 rounded-xl shadow-sm border border-gray-100 bg-white">
+    <div className="flex items-center justify-between p-4 max-[450px]:p-3 rounded-xl shadow-sm border border-gray-100 bg-white w-full">
       <div>
-        <div className="font-semibold text-black">{label}</div>
+        <div className="font-semibold text-black max-[450px]:text-sm">{label}</div>
       </div>
       <button
         onClick={() => setEnabled(!enabled)}
-        className={`w-12 h-6 rounded-full p-1 transition ${enabled ? 'bg-teal-600' : 'bg-gray-300'}`}
+        className={`w-12 h-6 rounded-full p-1 transition ${enabled ? 'bg-teal-600' : 'bg-gray-300'} max-[450px]:w-11 max-[450px]:h-5`}
       >
-        <div className={`w-4 h-4 rounded-full bg-white transition transform ${enabled ? 'translate-x-6' : ''}`}></div>
+        <div className={`w-4 h-4 rounded-full bg-white transition transform ${enabled ? 'translate-x-6' : ''} max-[450px]:w-3.5 max-[450px]:h-3.5`}></div>
       </button>
     </div>
   );
@@ -157,60 +159,97 @@ const CommentsPanel = () => {
 
 const TimeSlotPanel = ({ availability }) => {
   const initialAppliedRef = useRef(false);
-  const allDays = useMemo(() => ['Monday', 'Tuesday', 'Wednesday'], []);
+  const allDays = useMemo(() => ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'], []);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   const [selectedDays, setSelectedDays] = useState(() => ({
     Monday: true,
     Tuesday: true,
     Wednesday: true,
+    Thursday: false,
+    Friday: false,
+    Saturday: false,
+    Sunday: false,
   }));
 
   const [daySlots, setDaySlots] = useState(() => ({
     Monday: { slot1: { from: '', to: '' }, slot2: { from: '', to: '' } },
     Tuesday: { slot1: { from: '', to: '' }, slot2: { from: '', to: '' } },
     Wednesday: { slot1: { from: '', to: '' }, slot2: { from: '', to: '' } },
+    Thursday: { slot1: { from: '', to: '' }, slot2: { from: '', to: '' } },
+    Friday: { slot1: { from: '', to: '' }, slot2: { from: '', to: '' } },
+    Saturday: { slot1: { from: '', to: '' }, slot2: { from: '', to: '' } },
+    Sunday: { slot1: { from: '', to: '' }, slot2: { from: '', to: '' } },
   }));
 
   const [showSlot2, setShowSlot2] = useState(() => ({
     Monday: false,
-    Tuesday: true,
+    Tuesday: false,
     Wednesday: false,
+    Thursday: false,
+    Friday: false,
+    Saturday: false,
+    Sunday: false,
   }));
 
   useEffect(() => {
-    if (initialAppliedRef.current) return;
-    if (!Array.isArray(availability) || availability.length === 0) return;
+    const fetchAvailability = async () => {
+      try {
+        await callApi({
+          method: Method.GET,
+          endPoint: api.therapistProfileMe,
+          onSuccess: (response) => {
+            const fetchedAvailability = response?.data?.availability;
+            if (Array.isArray(fetchedAvailability)) {
+              const nextSelected = { ...selectedDays };
+              const nextSlots = { ...daySlots };
+              const nextShow2 = { ...showSlot2 };
 
-    const nextSelected = { ...selectedDays };
-    const nextSlots = { ...daySlots };
-    const nextShow2 = { ...showSlot2 };
+              fetchedAvailability.forEach((d) => {
+                const name = String(d?.day || '').trim().toLowerCase();
+                const mapped =
+                  name === 'monday'
+                    ? 'Monday'
+                    : name === 'tuesday'
+                      ? 'Tuesday'
+                      : name === 'wednesday'
+                        ? 'Wednesday'
+                        : name === 'thursday'
+                          ? 'Thursday'
+                          : name === 'friday'
+                            ? 'Friday'
+                            : name === 'saturday'
+                              ? 'Saturday'
+                              : name === 'sunday'
+                                ? 'Sunday'
+                                : null;
 
-    availability.forEach((d) => {
-      const name = String(d?.day || '').trim().toLowerCase();
-      const mapped =
-        name === 'monday'
-          ? 'Monday'
-          : name === 'tuesday'
-            ? 'Tuesday'
-            : name === 'wednesday'
-              ? 'Wednesday'
-              : null;
+                if (!mapped) return;
+                nextSelected[mapped] = true;
+                const slots = Array.isArray(d?.timeSlots) ? d.timeSlots : [];
+                if (slots[0]) nextSlots[mapped].slot1 = { from: slots[0]?.from || '', to: slots[0]?.to || '' };
+                if (slots[1]) {
+                  nextSlots[mapped].slot2 = { from: slots[1]?.from || '', to: slots[1]?.to || '' };
+                  nextShow2[mapped] = true;
+                }
+              });
 
-      if (!mapped) return;
-      nextSelected[mapped] = true;
-      const slots = Array.isArray(d?.timeSlots) ? d.timeSlots : [];
-      if (slots[0]) nextSlots[mapped].slot1 = { from: slots[0]?.from || '', to: slots[0]?.to || '' };
-      if (slots[1]) {
-        nextSlots[mapped].slot2 = { from: slots[1]?.from || '', to: slots[1]?.to || '' };
-        nextShow2[mapped] = true;
+              setSelectedDays(nextSelected);
+              setDaySlots(nextSlots);
+              setShowSlot2(nextShow2);
+            }
+          },
+          onError: (err) => {
+            console.error("Failed to fetch fresh availability", err);
+          }
+        });
+      } catch (e) {
+        console.error("Error fetching availability", e);
       }
-    });
+    };
 
-    setSelectedDays(nextSelected);
-    setDaySlots(nextSlots);
-    setShowSlot2(nextShow2);
-    initialAppliedRef.current = true;
-  }, [availability, daySlots, selectedDays, showSlot2]);
+    fetchAvailability();
+  }, []);
 
   const toggleDay = (day) => {
     setSelectedDays((prev) => ({ ...prev, [day]: !prev[day] }));
@@ -223,78 +262,143 @@ const TimeSlotPanel = ({ availability }) => {
     }));
   };
 
+  const handleUpdate = async () => {
+    setIsUpdating(true);
+    try {
+      const promises = allDays
+        .filter(day => selectedDays[day])
+        .map(day => {
+          const slots = [];
+          const dParams = daySlots[day];
+
+          // Helper to check if slot is valid
+          const isValidSlot = (s) => s.from && s.to && s.from < s.to;
+
+          if (isValidSlot(dParams.slot1)) {
+            slots.push(dParams.slot1);
+          }
+          if (showSlot2[day] && isValidSlot(dParams.slot2)) {
+            slots.push(dParams.slot2);
+          }
+
+          // Important: API requires lower case day name
+          return callApi({
+            method: Method.PATCH,
+            endPoint: api.availability,
+            bodyParams: {
+              day: day.toLowerCase(),
+              timeSlots: slots
+            },
+            onSuccess: () => {
+              // Individual success (optional logging)
+            },
+            onError: (err) => {
+              console.error(`Failed to update ${day}`, err);
+            }
+          });
+        });
+
+      await Promise.all(promises);
+
+      if (window.showToast) {
+        window.showToast("Availability updated successfully!", "success");
+      }
+    } catch (error) {
+      console.error("Update failed", error);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   return (
     <div className="p-4 md:p-6">
       <div className="space-y-6">
         {allDays.map((day) => (
-          <div key={day} className="flex items-start gap-4">
+          <div key={day} className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4 border-b border-gray-50 pb-4 md:border-none md:pb-0">
             <button
               type="button"
               onClick={() => toggleDay(day)}
-              className="flex items-center gap-3 min-w-[120px]"
+              className="flex items-center gap-3 min-w-[140px] mb-2 md:mb-0"
             >
               <div
-                className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                  selectedDays[day] ? 'bg-teal-600 border-teal-600' : 'border-gray-300 bg-white'
-                }`}
+                className={`w-6 h-6 rounded md:rounded-lg border-2 flex items-center justify-center transition-colors ${selectedDays[day] ? 'bg-teal-700 border-teal-700' : 'border-gray-200 bg-white'
+                  }`}
               >
                 {selectedDays[day] ? (
-                  <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                    <path
-                      fillRule="evenodd"
-                      d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                      clipRule="evenodd"
-                    />
+                  <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                   </svg>
                 ) : null}
               </div>
-              <span className="text-sm font-medium text-gray-700">{day}</span>
+              <span className="text-base font-semibold text-[#102a43]">{day}</span>
             </button>
 
             {selectedDays[day] ? (
-              <div className="flex flex-col gap-3">
-                <div className="flex flex-wrap gap-4">
-                  <input
-                    type="time"
-                    value={daySlots[day].slot1.from}
-                    onChange={(e) => updateTime(day, 'slot1', 'from', e.target.value)}
-                    className="w-28 px-3 py-2 rounded-lg border border-gray-100 bg-gray-50 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-200"
-                  />
-                  <input
-                    type="time"
-                    value={daySlots[day].slot1.to}
-                    onChange={(e) => updateTime(day, 'slot1', 'to', e.target.value)}
-                    className="w-28 px-3 py-2 rounded-lg border border-gray-100 bg-gray-50 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-200"
-                  />
-                </div>
+              <div className="flex flex-wrap items-center gap-3 md:gap-4 w-full md:w-auto">
+                {/* Slot 1 */}
+                <input
+                  type={daySlots[day].slot1.from ? "time" : "text"}
+                  placeholder="From"
+                  onFocus={(e) => (e.target.type = "time")}
+                  onBlur={(e) => {
+                    if (!e.target.value) e.target.type = "text";
+                  }}
+                  value={daySlots[day].slot1.from}
+                  onChange={(e) => updateTime(day, 'slot1', 'from', e.target.value)}
+                  className="w-[calc(50%-0.5rem)] md:w-[130px] px-4 py-3 rounded-xl border border-gray-100 bg-gray-50 text-sm text-gray-600 focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-gray-400"
+                />
+                <input
+                  type={daySlots[day].slot1.to ? "time" : "text"}
+                  placeholder="To"
+                  onFocus={(e) => (e.target.type = "time")}
+                  onBlur={(e) => {
+                    if (!e.target.value) e.target.type = "text";
+                  }}
+                  value={daySlots[day].slot1.to}
+                  onChange={(e) => updateTime(day, 'slot1', 'to', e.target.value)}
+                  className="w-[calc(50%-0.5rem)] md:w-[130px] px-4 py-3 rounded-xl border border-gray-100 bg-gray-50 text-sm text-gray-600 focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-gray-400"
+                />
 
+                {/* Slot 2 (merged into same flow) */}
                 {showSlot2[day] ? (
-                  <div className="flex flex-wrap gap-4">
+                  <>
                     <input
-                      type="time"
+                      type={daySlots[day].slot2.from ? "time" : "text"}
+                      placeholder="From"
+                      onFocus={(e) => (e.target.type = "time")}
+                      onBlur={(e) => {
+                        if (!e.target.value) e.target.type = "text";
+                      }}
                       value={daySlots[day].slot2.from}
                       onChange={(e) => updateTime(day, 'slot2', 'from', e.target.value)}
-                      className="w-28 px-3 py-2 rounded-lg border border-gray-100 bg-gray-50 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-200"
+                      className="w-[calc(50%-0.5rem)] md:w-[130px] px-4 py-3 rounded-xl border border-gray-100 bg-gray-50 text-sm text-gray-600 focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-gray-400"
                     />
                     <input
-                      type="time"
+                      type={daySlots[day].slot2.to ? "time" : "text"}
+                      placeholder="To"
+                      onFocus={(e) => (e.target.type = "time")}
+                      onBlur={(e) => {
+                        if (!e.target.value) e.target.type = "text";
+                      }}
                       value={daySlots[day].slot2.to}
                       onChange={(e) => updateTime(day, 'slot2', 'to', e.target.value)}
-                      className="w-28 px-3 py-2 rounded-lg border border-gray-100 bg-gray-50 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-200"
+                      className="w-[calc(50%-0.5rem)] md:w-[130px] px-4 py-3 rounded-xl border border-gray-100 bg-gray-50 text-sm text-gray-600 focus:outline-none focus:ring-1 focus:ring-teal-500 placeholder-gray-400"
                     />
-                  </div>
+                  </>
                 ) : null}
               </div>
             ) : null}
           </div>
         ))}
 
-        <div className="flex justify-end pt-6">
+        <div className="flex justify-start md:justify-end pt-6">
           <button
             type="button"
-            className="bg-teal-700 text-white font-medium px-14 py-3 rounded-xl hover:bg-teal-800 transition-colors"
+            onClick={handleUpdate}
+            disabled={isUpdating}
+            className={`bg-teal-700 text-white font-medium px-14 py-3 rounded-xl hover:bg-teal-800 transition-colors ${isUpdating ? 'opacity-70 cursor-not-allowed' : ''}`}
           >
-            Update
+            {isUpdating ? 'Updating...' : 'Update'}
           </button>
         </div>
       </div>
