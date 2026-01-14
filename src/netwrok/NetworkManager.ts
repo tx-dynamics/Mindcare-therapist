@@ -214,12 +214,14 @@ export const callApi = async ({
           return;
         }
 
-        // 🧩 Case 2: token/session expired
+        const isTokenExpired =
+          message.includes("jwt expired") ||
+          message.includes("token expired") ||
+          message.includes("access token expired") ||
+          message.includes("expired token");
+
         if (
-          (message.includes("jwt expired") ||
-            message.includes("token") ||
-            message.includes("expired") ||
-            message.includes("unauthorized")) &&
+          isTokenExpired &&
           count < 2 &&
           useAuthStore.getState().refreshToken
         ) {

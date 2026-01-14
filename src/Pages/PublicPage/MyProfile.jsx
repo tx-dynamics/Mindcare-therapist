@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Plus, Minus, X } from 'lucide-react';
 import { useOutletContext } from 'react-router-dom';
 import EditProfile from '../../components/EditProfile';
 import ChangePassword from '../../components/ChangePassword';
@@ -176,25 +176,13 @@ const TimeSlotPanel = ({ availability }) => {
     Sunday: false,
   }));
 
-  const [daySlots, setDaySlots] = useState(() => ({
-    Monday: { slot1: { from: '', to: '' }, slot2: { from: '', to: '' } },
-    Tuesday: { slot1: { from: '', to: '' }, slot2: { from: '', to: '' } },
-    Wednesday: { slot1: { from: '', to: '' }, slot2: { from: '', to: '' } },
-    Thursday: { slot1: { from: '', to: '' }, slot2: { from: '', to: '' } },
-    Friday: { slot1: { from: '', to: '' }, slot2: { from: '', to: '' } },
-    Saturday: { slot1: { from: '', to: '' }, slot2: { from: '', to: '' } },
-    Sunday: { slot1: { from: '', to: '' }, slot2: { from: '', to: '' } },
-  }));
-
-  const [showSlot2, setShowSlot2] = useState(() => ({
-    Monday: false,
-    Tuesday: false,
-    Wednesday: false,
-    Thursday: false,
-    Friday: false,
-    Saturday: false,
-    Sunday: false,
-  }));
+  const [daySlots, setDaySlots] = useState(() => {
+    const initial = {};
+    ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].forEach((day) => {
+      initial[day] = [{ from: '', to: '' }];
+    });
+    return initial;
+  });
 
   const [initialStateStr, setInitialStateStr] = useState('');
 
@@ -210,8 +198,10 @@ const TimeSlotPanel = ({ availability }) => {
             const fetchedAvailability = response?.data?.availability;
             if (Array.isArray(fetchedAvailability)) {
               const nextSelected = { ...selectedDays };
-              const nextSlots = { ...daySlots };
-              const nextShow2 = { ...showSlot2 };
+              const nextSlots = {};
+              allDays.forEach((day) => {
+                nextSlots[day] = [{ from: '', to: '' }];
+              });
 
               fetchedAvailability.forEach((d) => {
                 const name = String(d?.day || '').trim().toLowerCase();
@@ -235,20 +225,19 @@ const TimeSlotPanel = ({ availability }) => {
                 if (!mapped) return;
                 nextSelected[mapped] = true;
                 const slots = Array.isArray(d?.timeSlots) ? d.timeSlots : [];
-                if (slots[0]) nextSlots[mapped].slot1 = { from: slots[0]?.from || '', to: slots[0]?.to || '' };
-                if (slots[1]) {
-                  nextSlots[mapped].slot2 = { from: slots[1]?.from || '', to: slots[1]?.to || '' };
-                  nextShow2[mapped] = true;
+                if (slots.length > 0) {
+                  nextSlots[mapped] = slots.slice(0, 3).map((s) => ({
+                    from: s?.from || '',
+                    to: s?.to || '',
+                  }));
                 }
               });
 
               setSelectedDays(nextSelected);
               setDaySlots(nextSlots);
-              setShowSlot2(nextShow2);
               setInitialStateStr(JSON.stringify({
                 selectedDays: nextSelected,
-                daySlots: nextSlots,
-                showSlot2: nextShow2
+                daySlots: nextSlots
               }));
             }
           },
@@ -268,19 +257,47 @@ const TimeSlotPanel = ({ availability }) => {
     setSelectedDays((prev) => ({ ...prev, [day]: !prev[day] }));
   };
 
-  const updateTime = (day, slot, field, value) => {
+  const updateTime = (day, index, field, value) => {
     setDaySlots((prev) => {
-      const currentSlot = prev[day][slot];
+      const daySlotsForDay = [...(prev[day] || [{ from: '', to: '' }])];
+      const currentSlot = daySlotsForDay[index] || { from: '', to: '' };
       const updatedSlot = { ...currentSlot, [field]: value };
-      
-      // Auto-show Slot 2 if Slot 1 is filled (both start and end time)
-      if (slot === 'slot1' && updatedSlot.from && updatedSlot.to) {
-        setShowSlot2(prevShow => ({ ...prevShow, [day]: true }));
-      }
-
+      daySlotsForDay[index] = updatedSlot;
       return {
         ...prev,
-        [day]: { ...prev[day], [slot]: updatedSlot },
+        [day]: daySlotsForDay,
+      };
+    });
+  };
+
+  const addSlot = (day) => {
+    setDaySlots((prev) => {
+      const current = prev[day] || [{ from: '', to: '' }];
+      if (current.length >= 3) return prev;
+      return {
+        ...prev,
+        [day]: [...current, { from: '', to: '' }],
+      };
+    });
+  };
+
+  const removeSlot = (day, index) => {
+    setDaySlots((prev) => {
+      const current = prev[day] || [{ from: '', to: '' }];
+      if (current.length <= 1) return prev;
+      let next;
+      if (typeof index === 'number') {
+        if (index < 0 || index >= current.length) return prev;
+        next = [...current.slice(0, index), ...current.slice(index + 1)];
+      } else {
+        next = current.slice(0, -1);
+      }
+      if (next.length === 0) {
+        next = [{ from: '', to: '' }];
+      }
+      return {
+        ...prev,
+        [day]: next,
       };
     });
   };
@@ -288,8 +305,7 @@ const TimeSlotPanel = ({ availability }) => {
   const handleUpdate = async () => {
     const currentState = {
       selectedDays,
-      daySlots,
-      showSlot2
+      daySlots
     };
 
     if (initialStateStr && JSON.stringify(currentState) === initialStateStr) {
@@ -299,29 +315,43 @@ const TimeSlotPanel = ({ availability }) => {
       return;
     }
 
-    // Validation: Ensure selected days have valid time slots
     const invalidDays = [];
     const daysToValidate = allDays.filter(day => selectedDays[day]);
 
-    // Helper to check if slot is valid
-    const isValidSlot = (s) => s.from && s.to && s.from < s.to;
-    // Helper to check if slot is completely empty
-    const isEmptySlot = (s) => !s.from && !s.to;
+    const toMinutes = (time) => {
+      const [h, m] = String(time || '').split(':').map(Number);
+      if (Number.isNaN(h) || Number.isNaN(m)) return null;
+      return h * 60 + m;
+    };
 
+    const isValidSlot = (s) => {
+      const start = toMinutes(s.from);
+      const end = toMinutes(s.to);
+      if (start == null || end == null) return false;
+      const diff = end - start;
+      return diff > 0 && diff <= 60;
+    };
     for (const day of daysToValidate) {
-      const dParams = daySlots[day];
-      const s1Valid = isValidSlot(dParams.slot1);
-      // Slot 2 is valid if it's either fully valid OR completely empty (even if shown)
-      const s2Valid = !showSlot2[day] || isValidSlot(dParams.slot2) || isEmptySlot(dParams.slot2);
-
-      if (!s1Valid || !s2Valid) {
+      const slotsForDay = daySlots[day] || [];
+      const filledSlots = slotsForDay.filter((s) => s.from || s.to);
+      if (filledSlots.length === 0) {
+        invalidDays.push(day);
+        continue;
+      }
+      const hasInvalid = filledSlots.some((s) => !isValidSlot(s));
+      if (hasInvalid) {
         invalidDays.push(day);
       }
     }
 
     if (invalidDays.length > 0) {
       if (window.showToast) {
-        window.showToast(`Please check time slots for: ${invalidDays.join(', ')}. Ensure start time is before end time.`, "error");
+        window.showToast(
+          `Please check time slots for: ${invalidDays.join(
+            ', '
+          )}. Each slot must be at most 1 hour, and start time must be before end time.`,
+          "error"
+        );
       }
       return;
     }
@@ -332,26 +362,15 @@ const TimeSlotPanel = ({ availability }) => {
       const initialSelected = initialObj.selectedDays || {};
 
       for (const day of allDays) {
-        // Skip if day was unchecked and is still unchecked
         if (!selectedDays[day] && !initialSelected[day]) {
           continue;
         }
 
         const slots = [];
-        // Only populate slots if day is currently selected
         if (selectedDays[day]) {
-          const dParams = daySlots[day];
-
-          if (isValidSlot(dParams.slot1)) {
-            slots.push(dParams.slot1);
-          }
-          if (showSlot2[day] && isValidSlot(dParams.slot2)) {
-            slots.push(dParams.slot2);
-          }
+          const slotsForDay = daySlots[day] || [];
+          slots.push(...slotsForDay.filter((s) => isValidSlot(s)));
         }
-        // If !selectedDays[day], slots remains [], which clears the day
-
-        // Important: API requires lower case day name
         await callApi({
           method: Method.PATCH,
           endPoint: api.availability,
@@ -400,58 +419,60 @@ const TimeSlotPanel = ({ availability }) => {
             </button>
 
             {selectedDays[day] ? (
-              <div className="flex flex-wrap items-center gap-3 md:gap-4 w-full md:w-auto">
-                {/* Slot 1 */}
-                <input
-                  type={daySlots[day].slot1.from ? "time" : "text"}
-                  placeholder="From"
-                  onFocus={(e) => (e.target.type = "time")}
-                  onBlur={(e) => {
-                    if (!e.target.value) e.target.type = "text";
-                  }}
-                  value={daySlots[day].slot1.from}
-                  onChange={(e) => updateTime(day, 'slot1', 'from', e.target.value)}
-                  className="w-[calc(50%-0.5rem)] md:w-[130px] px-4 py-3 rounded-xl bg-[#F8F8F8] text-sm text-gray-600 focus:outline-none placeholder-gray-400"
-                />
-                <input
-                  type={daySlots[day].slot1.to ? "time" : "text"}
-                  placeholder="To"
-                  onFocus={(e) => (e.target.type = "time")}
-                  onBlur={(e) => {
-                    if (!e.target.value) e.target.type = "text";
-                  }}
-                  value={daySlots[day].slot1.to}
-                  onChange={(e) => updateTime(day, 'slot1', 'to', e.target.value)}
-                  className="w-[calc(50%-0.5rem)] md:w-[130px] px-4 py-3 rounded-xl bg-[#F8F8F8] text-sm text-gray-600 focus:outline-none placeholder-gray-400"
-                />
+              <div className="flex flex-col gap-3 w-full md:w-auto">
+                {(daySlots[day] || [{ from: '', to: '' }]).map((slot, index, arr) => {
+                  const isLast = index === arr.length - 1;
+                  const canAdd = arr.length < 3;
 
-                {/* Slot 2 (merged into same flow) */}
-                {showSlot2[day] ? (
-                  <>
-                    <input
-                      type={daySlots[day].slot2.from ? "time" : "text"}
-                      placeholder="From"
-                      onFocus={(e) => (e.target.type = "time")}
-                      onBlur={(e) => {
-                        if (!e.target.value) e.target.type = "text";
-                      }}
-                      value={daySlots[day].slot2.from}
-                      onChange={(e) => updateTime(day, 'slot2', 'from', e.target.value)}
-                      className="w-[calc(50%-0.5rem)] md:w-[130px] px-4 py-3 rounded-xl bg-[#F8F8F8] text-sm text-gray-600 focus:outline-none placeholder-gray-400"
-                    />
-                    <input
-                      type={daySlots[day].slot2.to ? "time" : "text"}
-                      placeholder="To"
-                      onFocus={(e) => (e.target.type = "time")}
-                      onBlur={(e) => {
-                        if (!e.target.value) e.target.type = "text";
-                      }}
-                      value={daySlots[day].slot2.to}
-                      onChange={(e) => updateTime(day, 'slot2', 'to', e.target.value)}
-                      className="w-[calc(50%-0.5rem)] md:w-[130px] px-4 py-3 rounded-xl bg-[#F8F8F8] text-sm text-gray-600 focus:outline-none placeholder-gray-400"
-                    />
-                  </>
-                ) : null}
+                  return (
+                    <div key={index} className="flex flex-wrap items-center gap-3 md:gap-4">
+                      <div className="relative">
+                        <input
+                          type={slot.from ? "time" : "text"}
+                          placeholder="From"
+                          onFocus={(e) => (e.target.type = "time")}
+                          onBlur={(e) => {
+                            if (!e.target.value) e.target.type = "text";
+                          }}
+                          value={slot.from}
+                          onChange={(e) => updateTime(day, index, 'from', e.target.value)}
+                          className="w-[calc(50%-0.5rem)] md:w-[130px] px-4 py-3 rounded-xl bg-[#F8F8F8] text-sm text-gray-600 focus:outline-none placeholder-gray-400"
+                        />
+                      </div>
+                      <div className="relative">
+                        {index === 1 ? (
+                          <button
+                            type="button"
+                            onClick={() => removeSlot(day, index)}
+                            className="absolute -top-3 right-1 text-xs text-gray-800 hover:text-red-500"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        ) : null}
+                        <input
+                          type={slot.to ? "time" : "text"}
+                          placeholder="To"
+                          onFocus={(e) => (e.target.type = "time")}
+                          onBlur={(e) => {
+                            if (!e.target.value) e.target.type = "text";
+                          }}
+                          value={slot.to}
+                          onChange={(e) => updateTime(day, index, 'to', e.target.value)}
+                          className="w-[calc(50%-0.5rem)] md:w-[130px] px-4 py-3 rounded-xl bg-[#F8F8F8] text-sm text-gray-600 focus:outline-none placeholder-gray-400"
+                        />
+                      </div>
+                      {isLast ? (
+                        <button
+                          type="button"
+                          onClick={() => (canAdd ? addSlot(day) : removeSlot(day))}
+                          className="w-8 h-8 bg-teal-700 hover:bg-teal-800 text-white rounded-full flex items-center justify-center transition-colors"
+                        >
+                          {canAdd ? <Plus className="w-4 h-4" /> : <Minus className="w-4 h-4" />}
+                        </button>
+                      ) : null}
+                    </div>
+                  );
+                })}
               </div>
             ) : null}
           </div>

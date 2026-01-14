@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { useAuthStore } from "./store/authSlice";
 import {
   SignIn,
   ForgotPasswordPage,
@@ -12,6 +13,14 @@ import {
   MyProfile,
   Appointment
 } from "./Pages/PagesList";
+
+function ProtectedRoute({ children }) {
+  const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
+  if (!isLoggedIn) {
+    return <Navigate to="/" replace />;
+  }
+  return children;
+}
 
 export default function App() {
   return (
@@ -27,7 +36,14 @@ export default function App() {
         <Route path="/create-profile" element={<ProfileCreation />} />
 
         {/* Protected Home Layout with nested routes */}
-        <Route path="home" element={<Home />} >
+        <Route
+          path="home"
+          element={
+            <ProtectedRoute>
+              <Home />
+            </ProtectedRoute>
+          }
+        >
             <Route index element={<Dashboard />} />
             <Route path="dashboard" element={<Dashboard />} />
              <Route path="my-profile" element={<MyProfile />} />

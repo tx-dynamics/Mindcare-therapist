@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Minus, Check } from 'lucide-react';
+import { Plus, Minus, Check, X } from 'lucide-react';
 
-const TimeInput = ({ value, onChange, placeholder, hasError }) => (
+const TimeInput = ({ value, onChange, placeholder, hasError, overlay }) => (
   <div className="relative">
+    {overlay}
     <input
       type={value ? "time" : "text"}
       onFocus={(e) => (e.target.type = "time")}
@@ -147,6 +148,17 @@ const TimeSlot = ({ onClick, onNext, isSubmitting = false, onSelectionChange }) 
     });
   };
 
+  const removeSlotAt = (day, index) => {
+    setTimeSlots(prev => {
+      const currentSlots = prev[day] || [];
+      if (currentSlots.length <= 1) {
+        return prev;
+      }
+      const updatedSlots = currentSlots.filter((_, i) => i !== index);
+      return { ...prev, [day]: updatedSlots };
+    });
+  };
+
   const removeSlot = (day) => {
     setTimeSlots(prev => {
       const currentSlots = prev[day] || [];
@@ -269,6 +281,17 @@ const TimeSlot = ({ onClick, onNext, isSubmitting = false, onSelectionChange }) 
                       value={slot.to || ''}
                       onChange={(e) => handleTimeChange(day, index, 'to', e.target.value)}
                       hasError={errors[`${day}-${index}-to`]}
+                      overlay={
+                        index === 1 ? (
+                          <button
+                            type="button"
+                            onClick={() => removeSlotAt(day, index)}
+                            className="absolute -top-2 right-1 text-xs text-gray-800 hover:text-red-500 pb-1"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        ) : null
+                      }
                     />
                   </React.Fragment>
                 ))}
