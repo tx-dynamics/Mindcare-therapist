@@ -303,7 +303,7 @@ const Modal = ({ onClose, children, showScrollbar }) => {
       onClick={onClose}
     >
       <div
-        className={`bg-white rounded-[20px] w-[95%] max-w-6xl max-h-[90vh] overflow-y-auto shadow-xl relative ${showScrollbar ? '' : 'hide-scrollbar'}`}
+        className="bg-white rounded-[20px] w-[95%] max-w-6xl max-h-[90vh] overflow-y-scroll shadow-xl relative"
         onClick={(e) => e.stopPropagation()}
       >
         {children}

@@ -77,7 +77,13 @@ const MyProfile = () => {
           onClick={() => setSelectedSection('privacy')}
         />
       </div>
-      <div className="w-full md:flex-1 bg-white rounded-xl shadow-md p-3 sm:p-4 md:p-6 mx-4 md:mx-0 max-[450px]:mx-2 max-[450px]:p-3 h-fit min-h-[450px]">
+      <div
+        className={`w-full md:flex-1 bg-white rounded-xl shadow-md mx-4 md:mx-0 max-[450px]:mx-2 h-fit min-h-[450px] ${
+          selectedSection === 'timeSlot'
+            ? 'p-2 sm:p-3 md:p-4 max-[450px]:p-2 pt-0 sm:pt-0 md:pt-0 max-[450px]:pt-0'
+            : 'p-3 sm:p-4 md:p-6 max-[450px]:p-3'
+        }`}
+      >
         {renderContent()}
       </div>
     </div>
@@ -143,7 +149,7 @@ const CommentsPanel = () => {
   );
 
   return (
-    <div className="p-4 md:p-6">
+    <div className="pt-0 pl-2 pr-4 pb-4 md:pt-1 md:pl-4 md:pr-6 md:pb-6">
       <div className="flex items-baseline gap-2 mb-6">
         <h2 className="text-lg font-semibold text-gray-900">Comments</h2>
         <span className="text-sm text-gray-400">(1040)</span>
@@ -165,6 +171,8 @@ const TimeSlotPanel = ({ availability }) => {
   const initialAppliedRef = useRef(false);
   const allDays = useMemo(() => ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'], []);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isSame, setIsSame] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
   const [selectedDays, setSelectedDays] = useState(() => ({
     Monday: true,
@@ -197,9 +205,10 @@ const TimeSlotPanel = ({ availability }) => {
           onSuccess: (response) => {
             const fetchedAvailability = response?.data?.availability;
             if (Array.isArray(fetchedAvailability)) {
-              const nextSelected = { ...selectedDays };
+              const nextSelected = {};
               const nextSlots = {};
               allDays.forEach((day) => {
+                nextSelected[day] = false;
                 nextSlots[day] = [{ from: '', to: '' }];
               });
 
@@ -223,10 +232,11 @@ const TimeSlotPanel = ({ availability }) => {
                                 : null;
 
                 if (!mapped) return;
-                nextSelected[mapped] = true;
                 const slots = Array.isArray(d?.timeSlots) ? d.timeSlots : [];
-                if (slots.length > 0) {
-                  nextSlots[mapped] = slots.slice(0, 3).map((s) => ({
+                const validSlots = slots.filter((s) => (s?.from || '').trim() && (s?.to || '').trim());
+                if (validSlots.length > 0) {
+                  nextSelected[mapped] = true;
+                  nextSlots[mapped] = validSlots.slice(0, 3).map((s) => ({
                     from: s?.from || '',
                     to: s?.to || '',
                   }));
@@ -254,7 +264,55 @@ const TimeSlotPanel = ({ availability }) => {
   }, []);
 
   const toggleDay = (day) => {
-    setSelectedDays((prev) => ({ ...prev, [day]: !prev[day] }));
+    setSelectedDays((prev) => {
+      const isSelecting = !prev[day];
+      const next = { ...prev, [day]: isSelecting };
+
+      if (isSelecting && isSame) {
+        const sourceDay = allDays.find((d) => prev[d]);
+        if (sourceDay && daySlots[sourceDay]) {
+          const sourceSlots = (daySlots[sourceDay] || []).filter(
+            (s) => (s.from || '').trim() && (s.to || '').trim()
+          );
+          setDaySlots((prevSlots) => ({
+            ...prevSlots,
+            [day]:
+              sourceSlots.length > 0
+                ? sourceSlots.slice(0, 2).map((s) => ({ from: s.from, to: s.to }))
+                : [{ from: '', to: '' }],
+          }));
+        }
+      }
+
+      return next;
+    });
+  };
+
+  const handleSameChange = () => {
+    const newIsSame = !isSame;
+    setIsSame(newIsSame);
+
+    if (newIsSame) {
+      const firstSelectedDay = allDays.find((day) => selectedDays[day]);
+      if (firstSelectedDay && daySlots[firstSelectedDay]) {
+        const sourceSlots = (daySlots[firstSelectedDay] || []).filter(
+          (s) => (s.from || '').trim() && (s.to || '').trim()
+        );
+
+        setDaySlots((prev) => {
+          const next = { ...prev };
+          allDays.forEach((day) => {
+            if (selectedDays[day] && day !== firstSelectedDay) {
+              next[day] =
+                sourceSlots.length > 0
+                  ? sourceSlots.slice(0, 2).map((s) => ({ from: s.from, to: s.to }))
+                  : [{ from: '', to: '' }];
+            }
+          });
+          return next;
+        });
+      }
+    }
   };
 
   const updateTime = (day, index, field, value) => {
@@ -263,17 +321,27 @@ const TimeSlotPanel = ({ availability }) => {
       const currentSlot = daySlotsForDay[index] || { from: '', to: '' };
       const updatedSlot = { ...currentSlot, [field]: value };
       daySlotsForDay[index] = updatedSlot;
-      return {
+      const next = {
         ...prev,
         [day]: daySlotsForDay,
       };
+
+      const hasFilledSlot = daySlotsForDay.some(
+        (slot) => (slot.from || '').trim() && (slot.to || '').trim()
+      );
+      setSelectedDays((prevSelected) => ({
+        ...prevSelected,
+        [day]: hasFilledSlot,
+      }));
+
+      return next;
     });
   };
 
   const addSlot = (day) => {
     setDaySlots((prev) => {
       const current = prev[day] || [{ from: '', to: '' }];
-      if (current.length >= 3) return prev;
+      if (current.length >= 2) return prev;
       return {
         ...prev,
         [day]: [...current, { from: '', to: '' }],
@@ -310,12 +378,13 @@ const TimeSlotPanel = ({ availability }) => {
 
     if (initialStateStr && JSON.stringify(currentState) === initialStateStr) {
       if (window.showToast) {
-        window.showToast("No time slot changes detected.", "error");
+        window.showToast("No changes in time slots.", "error");
       }
       return;
     }
 
     const invalidDays = [];
+    const duplicateDays = [];
     const daysToValidate = allDays.filter(day => selectedDays[day]);
 
     const toMinutes = (time) => {
@@ -338,18 +407,45 @@ const TimeSlotPanel = ({ availability }) => {
         invalidDays.push(day);
         continue;
       }
+
+      const keyMap = {};
+      filledSlots.forEach((s) => {
+        const fromTrim = (s.from || '').trim();
+        const toTrim = (s.to || '').trim();
+        if (!fromTrim || !toTrim) {
+          return;
+        }
+        const key = `${fromTrim}__${toTrim}`;
+        if (!keyMap[key]) {
+          keyMap[key] = 0;
+        }
+        keyMap[key] += 1;
+      });
+      const hasDuplicate = Object.values(keyMap).some((count) => count > 1);
+      if (hasDuplicate) {
+        duplicateDays.push(day);
+      }
+
       const hasInvalid = filledSlots.some((s) => !isValidSlot(s));
       if (hasInvalid) {
         invalidDays.push(day);
       }
     }
 
+    if (duplicateDays.length > 0) {
+      if (window.showToast) {
+        window.showToast(
+          `Remove duplicate time slots for: ${duplicateDays.join(', ')}`,
+          "error"
+        );
+      }
+      return;
+    }
+
     if (invalidDays.length > 0) {
       if (window.showToast) {
         window.showToast(
-          `Please check time slots for: ${invalidDays.join(
-            ', '
-          )}. Each slot must be at most 1 hour, and start time must be before end time.`,
+          `Time slots for ${invalidDays.join(', ')} should be within an hour.`,
           "error"
         );
       }
@@ -397,95 +493,177 @@ const TimeSlotPanel = ({ availability }) => {
 
   return (
     <div className="p-4 md:p-6">
+      {isEditing && (
+        <>
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">Add Time slot</h1>
+          <p className="text-sm text-gray-500 mb-4 max-w-xl">
+           Use this page to update the therapist’s time slots. You can add, edit, or remove available session timings as needed.
+          </p>
+        </>
+      )}
+
+      {isEditing && (
+        <div className="mb-4">
+          <label className="flex items-center cursor-pointer gap-3">
+            <div
+              className={`w-4.5 h-4.5 rounded-[6px] border flex items-center justify-center transition-colors ${
+                isSame ? 'bg-teal-700 border-teal-700' : 'border-gray-300'
+              }`}
+            >
+              {isSame && (
+                <svg
+                  className="w-3 h-3 text-white"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={3}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              )}
+            </div>
+            <input
+              type="checkbox"
+              checked={isSame}
+              onChange={handleSameChange}
+              className="hidden"
+            />
+            <span className="text-gray-900 text-base">Same time for all day</span>
+          </label>
+        </div>
+      )}
+
       <div className="space-y-6">
         {allDays.map((day) => (
-          <div key={day} className="flex flex-col gap-3 pb-4 md:pb-0">
-            <button
-              type="button"
-              onClick={() => toggleDay(day)}
-              className="flex items-center gap-3 min-w-[140px] mb-2 md:mb-0"
-            >
-              <div
-                className={`w-6 h-6 rounded border flex items-center justify-center transition-colors ${selectedDays[day] ? 'bg-teal-700 border-teal-700' : 'border-gray-200 bg-white'
-                  }`}
+          <div key={day} className="flex flex-col gap-2 pb-4 md:pb-0">
+            <div className="flex flex-nowrap items-center gap-4 overflow-x-auto pb-2 hide-scrollbar">
+              <button
+                type="button"
+                onClick={isEditing ? () => toggleDay(day) : undefined}
+                className="flex items-center gap-3 min-w-[120px]"
               >
-                {selectedDays[day] ? (
-                  <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                ) : null}
-              </div>
-              <span className="text-base font-bold text-[#102a43]">{day}</span>
-            </button>
+                <div
+                  className={`w-4.5 h-4.5 rounded border flex items-center justify-center transition-colors ${
+                    selectedDays[day] ? 'bg-teal-700 border-teal-700' : 'border-gray-200 bg-white'
+                  }`}
+                >
+                  {selectedDays[day] ? (
+                    <svg
+                      className="w-3 h-3 text-white"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={3}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : null}
+                </div>
+                <span className="text-base font-bold text-[#102a43] whitespace-nowrap">{day}</span>
+              </button>
 
-            {selectedDays[day] ? (
-              <div className="flex flex-col gap-3 w-full md:w-auto">
-                {(daySlots[day] || [{ from: '', to: '' }]).map((slot, index, arr) => {
-                  const isLast = index === arr.length - 1;
-                  const canAdd = arr.length < 3;
-
-                  return (
-                    <div key={index} className="flex flex-wrap items-center gap-3 md:gap-4">
+              {selectedDays[day] ? (
+                <div className="flex flex-nowrap items-center gap-3">
+                  {(daySlots[day] || [{ from: '', to: '' }]).map((slot, index) => (
+                    <React.Fragment key={index}>
                       <div className="relative">
                         <input
-                          type={slot.from ? "time" : "text"}
+                          type={slot.from ? 'time' : 'text'}
                           placeholder="From"
-                          onFocus={(e) => (e.target.type = "time")}
-                          onBlur={(e) => {
-                            if (!e.target.value) e.target.type = "text";
-                          }}
+                          onFocus={
+                            isEditing
+                              ? (e) => {
+                                  e.target.type = 'time';
+                                }
+                              : undefined
+                          }
+                          onBlur={
+                            isEditing
+                              ? (e) => {
+                                  if (!e.target.value) e.target.type = 'text';
+                                }
+                              : undefined
+                          }
                           value={slot.from}
-                          onChange={(e) => updateTime(day, index, 'from', e.target.value)}
-                          className="w-[calc(50%-0.5rem)] md:w-[130px] px-4 py-3 rounded-xl bg-[#F8F8F8] text-sm text-gray-600 focus:outline-none placeholder-gray-400"
+                          onChange={
+                            isEditing
+                              ? (e) => updateTime(day, index, 'from', e.target.value)
+                              : undefined
+                          }
+                          readOnly={!isEditing}
+                          className="w-[120px] h-[40px] px-3 rounded-[10px] bg-[#F8F8F8] text-sm text-gray-600 focus:outline-none placeholder-gray-400 opacity-100"
                         />
                       </div>
                       <div className="relative">
-                        {index === 1 ? (
-                          <button
-                            type="button"
-                            onClick={() => removeSlot(day, index)}
-                            className="absolute -top-3 right-1 text-xs text-gray-800 hover:text-red-500"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        ) : null}
                         <input
-                          type={slot.to ? "time" : "text"}
+                          type={slot.to ? 'time' : 'text'}
                           placeholder="To"
-                          onFocus={(e) => (e.target.type = "time")}
-                          onBlur={(e) => {
-                            if (!e.target.value) e.target.type = "text";
-                          }}
+                          onFocus={
+                            isEditing
+                              ? (e) => {
+                                  e.target.type = 'time';
+                                }
+                              : undefined
+                          }
+                          onBlur={
+                            isEditing
+                              ? (e) => {
+                                  if (!e.target.value) e.target.type = 'text';
+                                }
+                              : undefined
+                          }
                           value={slot.to}
-                          onChange={(e) => updateTime(day, index, 'to', e.target.value)}
-                          className="w-[calc(50%-0.5rem)] md:w-[130px] px-4 py-3 rounded-xl bg-[#F8F8F8] text-sm text-gray-600 focus:outline-none placeholder-gray-400"
+                          onChange={
+                            isEditing
+                              ? (e) => updateTime(day, index, 'to', e.target.value)
+                              : undefined
+                          }
+                          readOnly={!isEditing}
+                          className="w-[120px] h-[40px] px-3 rounded-[10px] bg-[#F8F8F8] text-sm text-gray-600 focus:outline-none placeholder-gray-400 opacity-100"
                         />
                       </div>
-                      {isLast ? (
-                        <button
-                          type="button"
-                          onClick={() => (canAdd ? addSlot(day) : removeSlot(day))}
-                          className="w-8 h-8 bg-teal-700 hover:bg-teal-800 text-white rounded-full flex items-center justify-center transition-colors"
-                        >
-                          {canAdd ? <Plus className="w-4 h-4" /> : <Minus className="w-4 h-4" />}
-                        </button>
-                      ) : null}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : null}
+                    </React.Fragment>
+                  ))}
+
+                  {isEditing && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        (daySlots[day] || [{ from: '', to: '' }]).length < 2
+                          ? addSlot(day)
+                          : removeSlot(day)
+                      }
+                      className="w-8 h-8 bg-teal-700 hover:bg-teal-800 text-white rounded-full flex items-center justify-center transition-colors"
+                    >
+                      {(daySlots[day] || [{ from: '', to: '' }]).length < 2 ? (
+                        <Plus className="w-4 h-4" />
+                      ) : (
+                        <Minus className="w-4 h-4" />
+                      )}
+                    </button>
+                  )}
+                </div>
+              ) : null}
+            </div>
           </div>
         ))}
 
         <div className="flex justify-end pt-6">
           <button
             type="button"
-            onClick={handleUpdate}
+            onClick={() => {
+              if (isEditing) {
+                handleUpdate();
+              } else {
+                setIsEditing(true);
+              }
+            }}
             disabled={isUpdating}
-            className={`bg-teal-700 text-white font-medium w-[312px] h-[50px] rounded-[12px] hover:bg-teal-800 transition-colors flex items-center justify-center ${isUpdating ? 'opacity-70 cursor-not-allowed' : ''}`}
+            className={`bg-teal-700 text-white font-medium w-[312px] h-[50px] rounded-[12px] hover:bg-teal-800 transition-colors flex items-center justify-center ${
+              isUpdating ? 'opacity-70 cursor-not-allowed' : ''
+            }`}
           >
-            {isUpdating ? 'Updating...' : 'Update'}
+            {isUpdating ? 'Updating...' : isEditing ? 'Save' : 'Edit'}
           </button>
         </div>
       </div>

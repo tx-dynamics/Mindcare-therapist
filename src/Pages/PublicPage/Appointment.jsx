@@ -56,10 +56,15 @@ const Appointment = () => {
     const params = new URLSearchParams();
     params.set('page', String(page));
     params.set('limit', String(limit));
-    // upcoming -> pending, completed -> completed or similar.
-    // User curl used 'pending'. Assuming 'completed' is also 'completed'.
-    const status = activeTab === 'upcoming' ? 'pending' : 'completed';
-    params.set('status', status);
+    let status = '';
+    if (activeTab === 'upcoming' || activeTab === 'missing') {
+      status = 'pending';
+    } else if (activeTab === 'completed') {
+      status = 'completed';
+    }
+    if (status) {
+      params.set('status', status);
+    }
 
     const query = params.toString();
     return `${api.appointmentsMe}?${query}`;
@@ -306,7 +311,7 @@ const Appointment = () => {
                 <button
                   type="button"
                   onClick={() => setActiveTab('upcoming')}
-                  className={`w-[121px] h-[33px] px-[21px] py-[9px] rounded-[16px] text-sm font-medium flex items-center justify-center gap-[10px] ${activeTab === 'upcoming' ? 'bg-teal-700 text-white' : 'bg-gray-200 text-gray-700'
+                  className={`w-[121px] h-[33px] px-[21px] py-[9px] rounded-[16px] text-sm font-medium flex items-center justify-center gap-[10px] ${activeTab === 'upcoming' ? 'bg-teal-700 text-white' : 'bg-[#E6E6E6] text-gray-700'
                     }`}
                 >
                   Upcoming
@@ -318,6 +323,14 @@ const Appointment = () => {
                     }`}
                 >
                   Completed
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('missing')}
+                  className={`w-[121px] h-[33px] px-[21px] py-[9px] rounded-[16px] text-sm font-medium flex items-center justify-center gap-[10px] ${activeTab === 'missing' ? 'bg-teal-700 text-white' : 'bg-[#E6E6E6] text-gray-700'
+                    }`}
+                >
+                  Missing
                 </button>
               </div>
             </div>
@@ -407,6 +420,18 @@ const Appointment = () => {
               const timeStr = start ? formatTime12h(start) : '';
               const dateObj = dateStr ? new Date(dateStr) : null;
 
+              // Build full start datetime for upcoming/missing split
+              let startsAt = null;
+              if (dateObj && start) {
+                const [h, m] = String(start).split(':').map(Number);
+                if (!Number.isNaN(h) && !Number.isNaN(m)) {
+                  const d = new Date(dateObj);
+                  d.setHours(h, m, 0, 0);
+                  startsAt = d;
+                }
+              }
+              const now = new Date();
+
               // Filter logic if date is selected
               if (isDateSelected) {
                 // If date is selected, compare. 
@@ -418,6 +443,14 @@ const Appointment = () => {
                     dateObj.getFullYear() === selectedDate.getFullYear();
                   if (!isSameDay) return null;
                 }
+              }
+
+              // Split pending into upcoming (future) and missing (past)
+              if (activeTab === 'upcoming' && startsAt && startsAt <= now) {
+                return null;
+              }
+              if (activeTab === 'missing' && startsAt && startsAt > now) {
+                return null;
               }
 
               const metaLine = (dateObj || timeStr)

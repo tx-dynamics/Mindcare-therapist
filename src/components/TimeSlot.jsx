@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Minus, Check, X } from 'lucide-react';
+import { Plus, Minus, Check } from 'lucide-react';
 
 const TimeInput = ({ value, onChange, placeholder, hasError, overlay }) => (
   <div className="relative">
@@ -13,7 +13,7 @@ const TimeInput = ({ value, onChange, placeholder, hasError, overlay }) => (
       placeholder={placeholder}
       value={value}
       onChange={onChange}
-      className={`w-[140px] px-4 py-3 bg-[#F8F8F8] rounded-[8px] focus:outline-none text-gray-700 placeholder-gray-400 ${
+      className={`w-[140px] h-[40px] px-3 bg-[#F8F8F8] rounded-[10px] focus:outline-none text-gray-700 placeholder-gray-400 opacity-100 ${
         hasError ? 'border border-red-500' : 'border-none'
       }`}
     />
@@ -24,7 +24,7 @@ const TimeSlot = ({ onClick, onNext, isSubmitting = false, onSelectionChange }) 
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
   const [selectedDays, setSelectedDays] = useState({
-    Monday: true,
+    Monday: false,
     Tuesday: false,
     Wednesday: false,
     Thursday: false,
@@ -39,7 +39,6 @@ const TimeSlot = ({ onClick, onNext, isSubmitting = false, onSelectionChange }) 
     }
   }, [selectedDays, onSelectionChange]);
 
-  const [showExtraBoxes, setShowExtraBoxes] = useState({});
   const [timeSlots, setTimeSlots] = useState({});
   const [errors, setErrors] = useState({});
   const [isSame, setIsSame] = useState(false);
@@ -127,7 +126,17 @@ const TimeSlot = ({ onClick, onNext, isSubmitting = false, onSelectionChange }) 
       const daySlots = [...(prev[day] || [])];
       if (!daySlots[index]) daySlots[index] = { from: '', to: '' };
       daySlots[index] = { ...daySlots[index], [field]: value };
-      return { ...prev, [day]: daySlots };
+      const next = { ...prev, [day]: daySlots };
+
+      const hasFilledSlot = daySlots.some(
+        (slot) => (slot.from || '').trim() && (slot.to || '').trim()
+      );
+      setSelectedDays(prevSelected => ({
+        ...prevSelected,
+        [day]: hasFilledSlot,
+      }));
+
+      return next;
     });
 
     if (value.trim()) {
@@ -141,21 +150,10 @@ const TimeSlot = ({ onClick, onNext, isSubmitting = false, onSelectionChange }) 
   const addSlot = (day) => {
     setTimeSlots(prev => {
       const currentSlots = prev[day] || [];
-      if (currentSlots.length < 3) {
+      if (currentSlots.length < 2) {
         return { ...prev, [day]: [...currentSlots, { from: '', to: '' }] };
       }
       return prev;
-    });
-  };
-
-  const removeSlotAt = (day, index) => {
-    setTimeSlots(prev => {
-      const currentSlots = prev[day] || [];
-      if (currentSlots.length <= 1) {
-        return prev;
-      }
-      const updatedSlots = currentSlots.filter((_, i) => i !== index);
-      return { ...prev, [day]: updatedSlots };
     });
   };
 
@@ -172,24 +170,104 @@ const TimeSlot = ({ onClick, onNext, isSubmitting = false, onSelectionChange }) 
   const validateFields = () => {
     const newErrors = {};
     let hasErrors = false;
+    const invalidDays = [];
+    const duplicateDays = [];
+
+    const toMinutes = (time) => {
+      const [h, m] = String(time || '').split(':').map(Number);
+      if (Number.isNaN(h) || Number.isNaN(m)) return null;
+      return h * 60 + m;
+    };
+
+    const isValidSlot = (slot) => {
+      const start = toMinutes(slot.from);
+      const end = toMinutes(slot.to);
+      if (start == null || end == null) return false;
+      const diff = end - start;
+      return diff > 0 && diff <= 60;
+    };
 
     Object.keys(selectedDays).forEach(day => {
-      if (selectedDays[day]) {
-        const slots = timeSlots[day] || [];
-        slots.forEach((slot, index) => {
-          if (!slot.from.trim()) {
+      if (!selectedDays[day]) return;
+
+      const slots = timeSlots[day] || [];
+      const slotKeyMap = {};
+      const filledSlots = slots.filter(
+        (slot) => (slot.from || '').trim() || (slot.to || '').trim()
+      );
+
+      if (filledSlots.length === 0) {
+        invalidDays.push(day);
+        if (slots[0]) {
+          newErrors[`${day}-0-from`] = true;
+          newErrors[`${day}-0-to`] = true;
+          hasErrors = true;
+        }
+      }
+
+      slots.forEach((slot, index) => {
+        const fromTrim = (slot.from || '').trim();
+        const toTrim = (slot.to || '').trim();
+
+        if (!fromTrim) {
+          newErrors[`${day}-${index}-from`] = true;
+          hasErrors = true;
+        }
+        if (!toTrim) {
+          newErrors[`${day}-${index}-to`] = true;
+          hasErrors = true;
+        }
+
+        if (fromTrim && toTrim) {
+          if (!isValidSlot({ from: fromTrim, to: toTrim })) {
             newErrors[`${day}-${index}-from`] = true;
-            hasErrors = true;
-          }
-          if (!slot.to.trim()) {
             newErrors[`${day}-${index}-to`] = true;
             hasErrors = true;
+            if (!invalidDays.includes(day)) {
+              invalidDays.push(day);
+            }
           }
-        });
-      }
+
+          const key = `${fromTrim}__${toTrim}`;
+          if (!slotKeyMap[key]) {
+            slotKeyMap[key] = [];
+          }
+          slotKeyMap[key].push(index);
+        }
+      });
+
+      Object.values(slotKeyMap).forEach((indices) => {
+        if (indices.length > 1) {
+          hasErrors = true;
+          if (!duplicateDays.includes(day)) {
+            duplicateDays.push(day);
+          }
+          indices.forEach((idx) => {
+            newErrors[`${day}-${idx}-from`] = true;
+            newErrors[`${day}-${idx}-to`] = true;
+          });
+        }
+      });
     });
 
     setErrors(newErrors);
+
+    if (duplicateDays.length > 0 && typeof window !== 'undefined' && window.showToast) {
+      window.showToast(
+        `Remove duplicate time slots for: ${duplicateDays.join(', ')}`,
+        'error'
+      );
+      return false;
+    }
+
+    if (invalidDays.length > 0 && typeof window !== 'undefined' && window.showToast) {
+      window.showToast(
+        `Time slots for ${invalidDays.join(', ')} should be within an hour.`,
+        'error'
+      );
+      return false;
+    }
+
     return !hasErrors;
   };
 
@@ -220,102 +298,97 @@ const TimeSlot = ({ onClick, onNext, isSubmitting = false, onSelectionChange }) 
 
   return (
     <div className="bg-white p-6 md:py-8 md:pr-8 md:pl-[60px] w-full mx-auto">
-      <h1 className="text-3xl font-bold text-gray-900 mb-8">Add Time slot</h1>
+      <h1 className="text-3xl font-bold text-gray-900 mb-2">Add Time slot</h1>
+      <p className="text-sm text-gray-500 mb-4 max-w-xl">
+       This ensures that clients can see and book appointments at suitable times. Make sure to review and save the slots to reflect the correct availability in the system.
+      </p>
+
+      <div className="mb-4">
+        <label className="flex items-center cursor-pointer gap-3">
+          <div
+            className={`w-4.5 h-4.5 rounded-[6px] border flex items-center justify-center transition-colors ${
+              isSame ? 'bg-teal-700 border-teal-700' : 'border-gray-300'
+            }`}
+          >
+            {isSame && <Check size={14} className="text-white" strokeWidth={3} />}
+          </div>
+          <input
+            type="checkbox"
+            checked={isSame}
+            onChange={handleSameChange}
+            className="hidden"
+          />
+          <span className="text-gray-900 text-base">Same time for all day</span>
+        </label>
+      </div>
 
       <div className="space-y-5 mb-2">
-        {days.map((day, index) => (
-          <div key={day} className="flex flex-col gap-3">
-            {/* Day Row Header */}
-            <div className="flex items-center gap-4">
-               {/* Custom Checkbox */}
-               <label className="flex items-center cursor-pointer gap-3">
-                 <div className={`w-6 h-6 rounded-[6px] border flex items-center justify-center transition-colors ${
-                   selectedDays[day] ? 'bg-teal-700 border-teal-700' : 'border-gray-300'
-                 }`}>
-                   {selectedDays[day] && <Check size={16} className="text-white" strokeWidth={3} />}
-                 </div>
-                 <input
-                   type="checkbox"
-                   checked={selectedDays[day]}
-                   onChange={() => handleDayChange(day)}
-                   className="hidden"
-                 />
-                 <span className="text-gray-900 font-bold text-base">{day}</span>
-               </label>
+        {days.map((day) => {
+          const slotsForDay = timeSlots[day] || [];
+          const maxSlots = 2;
 
-               {/* Same Checkbox (Monday Only) */}
-               {index === 0 && (
-                 <label className="flex items-center cursor-pointer gap-3 ml-2">
-                   <div className={`w-6 h-6 rounded-[6px] border flex items-center justify-center transition-colors ${
-                     isSame ? 'border-teal-700' : 'border-gray-300'
-                   }`}>
-                     {/* The image shows an empty box for 'Same' unless checked. Assuming checked state styling similar to others or just border?
-                         The image shows 'Same' unchecked. I'll make it consistent. */}
-                     {isSame && <Check size={16} className="text-teal-700" strokeWidth={3} />}
-                   </div>
-                   <input
-                    type="checkbox"
-                    checked={isSame}
-                    onChange={handleSameChange}
-                    className="hidden"
-                  />
-                   <span className="text-gray-500 text-base">Same</span>
-                 </label>
-               )}
-            </div>
-
-            {/* Time Slots */}
-            {selectedDays[day] && (
-              <div className="flex flex-nowrap items-center gap-4 overflow-x-auto pb-2 hide-scrollbar">
-                {/* Dynamic Slots */}
-                {(timeSlots[day] || []).map((slot, index) => (
-                  <React.Fragment key={index}>
-                    <TimeInput
-                      placeholder="From"
-                      value={slot.from || ''}
-                      onChange={(e) => handleTimeChange(day, index, 'from', e.target.value)}
-                      hasError={errors[`${day}-${index}-from`]}
+          return (
+            <div key={day} className="flex flex-col gap-3">
+              <div className="flex flex-nowrap items-center gap-4 overflow-x-auto pb-2">
+                <div className="flex items-center min-w-[140px]">
+                  <label className="flex items-center cursor-pointer gap-3">
+                    <div
+                      className={`w-4.5 h-4.5 rounded-[6px] border flex items-center justify-center transition-colors ${
+                        selectedDays[day] ? 'bg-teal-700 border-teal-700' : 'border-gray-300'
+                      }`}
+                    >
+                      {selectedDays[day] && <Check size={14} className="text-white" strokeWidth={3} />}
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={selectedDays[day]}
+                      onChange={() => handleDayChange(day)}
+                      className="hidden"
                     />
-                    <TimeInput
-                      placeholder="To"
-                      value={slot.to || ''}
-                      onChange={(e) => handleTimeChange(day, index, 'to', e.target.value)}
-                      hasError={errors[`${day}-${index}-to`]}
-                      overlay={
-                        index === 1 ? (
-                          <button
-                            type="button"
-                            onClick={() => removeSlotAt(day, index)}
-                            className="absolute -top-2 right-1 text-xs text-gray-800 hover:text-red-500 pb-1"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        ) : null
-                      }
-                    />
-                  </React.Fragment>
-                ))}
+                    <span className="text-gray-900 font-bold text-base whitespace-nowrap">{day}</span>
+                  </label>
+                </div>
 
-                {/* Add/Remove Button */}
-                {(timeSlots[day] || []).length < 3 ? (
-                  <button
-                    onClick={() => addSlot(day)}
-                    className="w-8 h-8 bg-teal-700 hover:bg-teal-800 text-white rounded-full flex items-center justify-center ml-2 transition-colors shrink-0"
-                  >
-                    <Plus size={18} />
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => removeSlot(day)}
-                    className="w-8 h-8 bg-teal-700 hover:bg-teal-800 text-white rounded-full flex items-center justify-center ml-2 transition-colors shrink-0"
-                  >
-                    <Minus size={18} />
-                  </button>
+                {selectedDays[day] && (
+                  <div className="flex flex-nowrap items-center gap-3">
+                    {(slotsForDay || []).map((slot, index) => (
+                      <React.Fragment key={index}>
+                        <TimeInput
+                          placeholder="From"
+                          value={slot.from || ''}
+                          onChange={(e) => handleTimeChange(day, index, 'from', e.target.value)}
+                          hasError={errors[`${day}-${index}-from`]}
+                        />
+                        <TimeInput
+                          placeholder="To"
+                          value={slot.to || ''}
+                          onChange={(e) => handleTimeChange(day, index, 'to', e.target.value)}
+                          hasError={errors[`${day}-${index}-to`]}
+                        />
+                      </React.Fragment>
+                    ))}
+
+                    {slotsForDay.length < maxSlots ? (
+                      <button
+                        onClick={() => addSlot(day)}
+                        className="ml-3 w-8 h-8 bg-teal-700 hover:bg-teal-800 text-white rounded-full flex items-center justify-center transition-colors shrink-0"
+                      >
+                        <Plus size={18} />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => removeSlot(day)}
+                        className="ml-3 w-8 h-8 bg-teal-700 hover:bg-teal-800 text-white rounded-full flex items-center justify-center transition-colors shrink-0"
+                      >
+                        <Minus size={18} />
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
-            )}
-          </div>
-        ))}
+            </div>
+          );
+        })}
       </div>
 
       {/* Footer */}
