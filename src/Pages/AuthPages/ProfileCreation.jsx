@@ -29,7 +29,7 @@ const ProfileCreation = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [draftProfile, setDraftProfile] = useState(null);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
-  const specializations = ['Stress', 'Anxiety', 'Sleep', 'Focus'];
+  const specializations = ['Stress management', 'Anxiety', 'Sleep', 'Focus'];
   const updateUserData = useAuthStore((s) => s.updateUserData);
   const [showScrollbar, setShowScrollbar] = useState(false);
 
@@ -110,7 +110,7 @@ const ProfileCreation = () => {
   };
   const mapSpecializationKey = (value) => {
     const mapping = {
-      Stress: 'stress_management',
+      'Stress management': 'stress_management',
       Anxiety: 'anxiety',
       Sleep: 'sleep',
       Focus: 'focus',
@@ -258,15 +258,30 @@ const ProfileCreation = () => {
               {/* Specializations */}
               <div className="pt-2">
                 <h6 className="text-base text-gray-500 mb-3">Specialization</h6>
-                <div className="grid grid-cols-4 gap-2">
-                  {specializations.map((item) => {
+                <div className="flex gap-2 mb-2">
+                  {specializations.filter((item) => item !== 'Stress management').map((item) => {
                     const isSelected = selectedSpecializations.includes(item);
                     return (
                       <button
                         type="button"
                         key={item}
                         onClick={() => toggleSpecialization(item, setFieldValue)}
-                        className={`w-full py-2 rounded-[8px] text-sm font-medium transition-colors flex items-center justify-center ${isSelected ? 'bg-teal-700 text-white' : 'bg-[#D9D9D9] text-white hover:bg-gray-400'}`}
+                        className={`w-full py-2 rounded-[8px] text-sm font-medium transition-colors flex items-center justify-center whitespace-nowrap ${isSelected ? 'bg-teal-700 text-white' : 'bg-[#D9D9D9] text-white hover:bg-gray-400'}`}
+                      >
+                        {item}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="flex gap-2">
+                  {specializations.filter((item) => item === 'Stress management').map((item) => {
+                    const isSelected = selectedSpecializations.includes(item);
+                    return (
+                      <button
+                        type="button"
+                        key={item}
+                        onClick={() => toggleSpecialization(item, setFieldValue)}
+                        className={`px-4 py-2 rounded-[8px] text-sm font-medium transition-colors flex items-center justify-center whitespace-nowrap ${isSelected ? 'bg-teal-700 text-white' : 'bg-[#D9D9D9] text-white hover:bg-gray-400'}`}
                       >
                         {item}
                       </button>

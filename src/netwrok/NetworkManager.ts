@@ -49,6 +49,16 @@ declare global {
 const showToast = (message?: string, type: "error" | "success" | "warning" = "error") => {
   if (!message) return;
   try {
+    const lowerMsg = String(message).toLowerCase();
+    const path = typeof window !== "undefined" ? window.location?.pathname || "" : "";
+
+    if (
+      path.startsWith("/create-profile") &&
+      (lowerMsg.includes("profile not found") || lowerMsg.includes("therapist profile not found"))
+    ) {
+      return;
+    }
+
     const fn = (window as any).showToast;
     if (typeof fn === "function") {
       fn(String(message), type);
