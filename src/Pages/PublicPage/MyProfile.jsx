@@ -122,47 +122,99 @@ const ToggleItem = ({ label }) => {
 };
 
 const CommentsPanel = () => {
-  const comments = useMemo(
-    () => [
-      {
-        id: 1,
-        author: 'Anonymous',
-        body: 'Lorem ipsum dolor sit amet consectetur. Purus massa tristique arcu tempus ut ac porttitor. Lorem ipsum dolor sit amet consectetur.',
+  const [items, setItems] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [apiError, setApiError] = useState('');
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
+  const [totalItems, setTotalItems] = useState(0);
+
+  useEffect(() => {
+    let isActive = true;
+    setIsLoading(true);
+    setApiError('');
+    const params = new URLSearchParams();
+    params.set('page', String(page));
+    params.set('limit', String(limit));
+    const endPoint = `${api.feedbackAnonymous}?${params.toString()}`;
+    void callApi({
+      method: Method.GET,
+      endPoint,
+      onSuccess: (response) => {
+        if (!isActive) return;
+        const payload = response?.data ?? response;
+        const list = Array.isArray(payload?.data)
+          ? payload.data
+          : Array.isArray(payload)
+            ? payload
+            : [];
+        setItems(list);
+        const total =
+          Number(payload?.meta?.totalItems ?? payload?.totalItems ?? payload?.total ?? payload?.count ?? list.length) || 0;
+        setTotalItems(total);
+        setIsLoading(false);
       },
-      {
-        id: 2,
-        author: 'Anonymous',
-        body: 'Lorem ipsum dolor sit amet consectetur. Purus massa tristique arcu tempus ut ac porttitor. Lorem ipsum dolor sit amet consectetur.',
+      onError: (err) => {
+        if (!isActive) return;
+        setItems([]);
+        setApiError(err?.message || 'Failed to load feedback.');
+        setIsLoading(false);
       },
-      {
-        id: 3,
-        author: 'Anonymous',
-        body: 'Lorem ipsum dolor sit amet consectetur. Purus massa tristique arcu tempus ut ac porttitor. Lorem ipsum dolor sit amet consectetur.',
-      },
-      {
-        id: 4,
-        author: 'Anonymous',
-        body: 'Lorem ipsum dolor sit amet consectetur. Purus massa tristique arcu tempus ut ac porttitor. Lorem ipsum dolor sit amet consectetur.',
-      },
-    ],
-    []
-  );
+    });
+    return () => {
+      isActive = false;
+    };
+  }, [page, limit]);
 
   return (
     <div className="pt-0 pl-2 pr-4 pb-4 md:pt-1 md:pl-4 md:pr-6 md:pb-6">
       <div className="flex items-baseline gap-2 mb-6">
         <h2 className="text-lg font-semibold text-gray-900">Comments</h2>
-        <span className="text-sm text-gray-400">(1040)</span>
+        <span className="text-sm text-gray-400">({items.length})</span>
       </div>
-
+      {apiError ? <div className="text-red-500 text-sm mb-4">{apiError}</div> : null}
+      {isLoading ? <div className="text-gray-600 text-sm mb-4">Loading...</div> : null}
       <div className="space-y-4">
-        {comments.map((c) => (
-          <div key={c.id} className="rounded-xl border border-gray-100 bg-white px-5 py-4 shadow-sm">
-            <div className="text-sm font-semibold text-gray-900 mb-2">{c.author}</div>
-            <div className="text-sm text-gray-500 leading-relaxed">{c.body}</div>
-          </div>
-        ))}
+        {items.map((c, idx) => {
+          const key = c?._id || c?.id || idx;
+          const author = 'Anonymous';
+          const body =
+            c?.comment ||
+            c?.text ||
+            c?.feedback ||
+            c?.message ||
+            '-';
+          return (
+            <div key={key} className="rounded-xl border border-gray-100 bg-white px-5 py-4 shadow-sm">
+              <div className="text-sm font-semibold text-gray-900 mb-2">{author}</div>
+              <div className="text-sm text-gray-500 leading-relaxed">{body}</div>
+            </div>
+          );
+        })}
+        {!isLoading && items.length === 0 ? (
+          <div className="text-gray-600 text-sm">No comments found.</div>
+        ) : null}
       </div>
+      {totalItems > limit && (
+        <div className="flex flex-wrap items-center justify-end gap-2 mt-6">
+          {Array.from({ length: Math.ceil(totalItems / limit) }).map((_, i) => {
+            const num = i + 1;
+            const active = num === page;
+            return (
+              <button
+                key={num}
+                type="button"
+                onClick={() => setPage(num)}
+                className={`px-3 py-1 rounded-lg border text-sm ${
+                  active ? 'border-teal-700 bg-teal-700 text-white' : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                {num}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };

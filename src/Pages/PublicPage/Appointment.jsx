@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { ArrowLeft, Calendar, CalendarDays, ChevronDown, Clock, MapPin, X } from 'lucide-react';
+import { ArrowLeft, CalendarDays, ChevronDown, Clock, MapPin, X } from 'lucide-react';
 import { Method, callApi } from '../../netwrok/NetworkManager';
 import { api } from '../../netwrok/Environment';
 import { DEFAULT_AVATAR } from '../../assets/defaultAvatar';
+import { useAuthStore } from '../../store/authSlice';
+import GroupIcon from '../../assets/Images/Group.png';
 
 const formatTime12h = (time24) => {
   if (!time24 || typeof time24 !== 'string') return '';
@@ -21,16 +23,17 @@ const Appointment = () => {
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const calendarRef = useRef(null);
+  const feedbackRef = useRef(null);
   const [error, setError] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [isDateSelected, setIsDateSelected] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
-  const [feedback, setFeedback] = useState('');
   const [page, setPage] = useState(1);
   const [limit] = useState(30);
   const [activeTab, setActiveTab] = useState('upcoming');
   const [appointments, setAppointments] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isMarkingComplete, setIsMarkingComplete] = useState(false);
   const { navigationEvent } = useOutletContext();
 
   useEffect(() => {
@@ -51,6 +54,21 @@ const Appointment = () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
+
+  useEffect(() => {
+    try {
+      if (isModalOpen) {
+        document.body.style.overflow = 'hidden';
+      } else {
+        document.body.style.overflow = '';
+      }
+    } catch {}
+    return () => {
+      try {
+        document.body.style.overflow = '';
+      } catch {}
+    };
+  }, [isModalOpen]);
 
   const endPoint = useMemo(() => {
     const params = new URLSearchParams();
@@ -164,18 +182,78 @@ const Appointment = () => {
     setSelectedAppointment(null);
   };
 
+  const getAppointmentId = (appointment) => {
+    if (!appointment) return null;
+    return appointment.appointmentId || appointment.id || appointment._id || null;
+  };
+
+  const handleMarkAsComplete = () => {
+    const id = getAppointmentId(selectedAppointment);
+    if (!id || isMarkingComplete) return;
+
+    setIsMarkingComplete(true);
+
+    void callApi({
+      method: Method.PATCH,
+      endPoint: `${api.appointments}/${id}/status`,
+      bodyParams: { status: 'completed', completionComment: selectedAppointment?.completionComment || 'Shared after-session guidance.' },
+      onSuccess: () => {
+        setIsMarkingComplete(false);
+        window.showToast?.('Appointment marked as complete', 'success');
+        setSelectedAppointment((prev) => (prev ? { ...prev, status: 'completed' } : prev));
+        setAppointments((prev) =>
+          prev.map((a) => (getAppointmentId(a) === id ? { ...a, status: 'completed' } : a))
+        );
+      },
+      onError: () => {
+        setIsMarkingComplete(false);
+      },
+    });
+  };
+
+  const isAppointmentVisible = (appointment) => {
+    const dateStr = appointment.appointmentDate || appointment.date;
+    const start = appointment.startTime || appointment.time;
+    const dateObj = dateStr ? new Date(dateStr) : null;
+
+    let startsAt = null;
+    if (dateObj && start) {
+      const [h, m] = String(start).split(':').map(Number);
+      if (!Number.isNaN(h) && !Number.isNaN(m)) {
+        const d = new Date(dateObj);
+        d.setHours(h, m, 0, 0);
+        startsAt = d;
+      }
+    }
+
+    const now = new Date();
+
+    if (isDateSelected && dateObj) {
+      const isSameDay =
+        dateObj.getDate() === selectedDate.getDate() &&
+        dateObj.getMonth() === selectedDate.getMonth() &&
+        dateObj.getFullYear() === selectedDate.getFullYear();
+      if (!isSameDay) return false;
+    }
+
+    if (activeTab === 'upcoming' && startsAt && startsAt <= now) {
+      return false;
+    }
+    if (activeTab === 'missing' && startsAt && startsAt > now) {
+      return false;
+    }
+
+    return true;
+  };
+
+  const visibleAppointments = appointments.filter(isAppointmentVisible);
+
   const Modal = ({ onClose, children }) => {
     return (
       <div className="fixed inset-0 backdrop-blur-sm bg-black/10 flex items-center justify-center z-50"
         onClick={() => setIsModalOpen(false)}>
-        <div className="bg-white shadow-lg rounded-lg max-w-md w-full mx-4 relative"
+        <div className="bg-[#F9FAFB] shadow-lg rounded-lg max-w-md w-full mx-4 relative"
           onClick={(e) => e.stopPropagation()}>
-          <button
-            onClick={onClose}
-            className="absolute top-2 right-2 p-2 hover:bg-gray-100 rounded-full"
-          >
-            <X className="w-4 h-4" />
-          </button>
           {children}
         </div>
       </div>
@@ -184,10 +262,16 @@ const Appointment = () => {
 
 
   if (selectedAppointment) {
-    // Determine overlapping fields
     const user = selectedAppointment.user || {};
-    const name = selectedAppointment.name || user.name || user.fullName || '-';
+    const profile = user.profile || {};
+    const name =
+      profile.name ||
+      selectedAppointment.name ||
+      user.name ||
+      user.fullName ||
+      '-';
     const profileImage =
+      sanitizeImageUrl(profile.profilePicture) ||
       sanitizeImageUrl(selectedAppointment.profileImage) ||
       sanitizeImageUrl(user.profileImage) ||
       user.avatar ||
@@ -200,8 +284,22 @@ const Appointment = () => {
       month: 'short',
       year: 'numeric',
     }).toUpperCase() : '';
-    
     const displayTime = selectedAppointment.startTime ? formatTime12h(selectedAppointment.startTime) : '';
+
+    const startRaw = selectedAppointment.startTime || selectedAppointment.time;
+    let isUpcoming = false;
+    if (dateObj && startRaw) {
+      const [h, m] = String(startRaw).split(':').map(Number);
+      if (!Number.isNaN(h) && !Number.isNaN(m)) {
+        const d = new Date(dateObj);
+        d.setHours(h, m, 0, 0);
+        isUpcoming = d > new Date();
+      }
+    }
+    const statusValue = String(selectedAppointment.status || '').toLowerCase();
+    const hasMyFeedback = !!(selectedAppointment?.myFeedback && (selectedAppointment.myFeedback.comment || selectedAppointment.myFeedback.text));
+    const canMarkComplete = statusValue === 'pending' && isUpcoming;
+    const canGiveFeedback = statusValue === 'completed' && !hasMyFeedback;
 
     return (
       <>
@@ -247,6 +345,49 @@ const Appointment = () => {
                 <h2 className="font-nunito font-bold text-[18px] leading-[24px] tracking-[0px] text-[#121212] mb-2">AI Summary</h2>
                 <p className="font-nunito font-normal text-[16px] leading-[100%] tracking-[0px] text-[#121212]">{selectedAppointment?.aiSummary || 'No AI summary available.'}</p>
               </div>
+              {hasMyFeedback && (
+                <div className="mt-6">
+                  <h2 className="font-nunito font-bold text-[18px] leading-[24px] tracking-[0px] text-[#121212] mb-2">My feedback</h2>
+                  <p className="font-nunito font-normal text-[16px] leading-[100%] tracking-[0px] text-[#121212]">
+                    {selectedAppointment?.myFeedback?.comment || selectedAppointment?.myFeedback?.text || '—'}
+                  </p>
+                </div>
+              )}
+              {activeTab === 'missing' && (
+                <div className="mt-6">
+                  <h2 className="font-nunito font-bold text-[18px] leading-[24px] tracking-[0px] text-[#121212] mb-2">Reason for Missing</h2>
+                  <p className="font-nunito font-normal text-[16px] leading-[100%] tracking-[0px] text-[#121212]">
+                    {selectedAppointment?.missingReason || 'No reason provided.'}
+                  </p>
+                </div>
+              )}
+              {canMarkComplete && (
+                <div className="mt-6 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleMarkAsComplete}
+                    disabled={isMarkingComplete}
+                    className={`w-[221px] h-[48px] rounded-[12px] border text-sm font-medium flex items-center justify-center ${
+                      isMarkingComplete
+                        ? 'bg-teal-300 border-teal-300 cursor-not-allowed text-white'
+                        : 'bg-teal-700 border-teal-700 hover:bg-teal-800 hover:border-teal-800 text-white'
+                    }`}
+                  >
+                    {isMarkingComplete ? 'Marking...' : 'Mark As Complete'}
+                  </button>
+                </div>
+              )}
+              {canGiveFeedback && (
+                <div className="mt-6 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(true)}
+                    className="w-[221px] h-[48px] rounded-[12px] border text-sm font-medium flex items-center justify-center bg-teal-700 border-teal-700 hover:bg-teal-800 hover:border-teal-800 text-white"
+                  >
+                    Give Feedback
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -256,14 +397,13 @@ const Appointment = () => {
               <h2 className="text-xl font-bold mb-4">Feedback</h2>
 
               <textarea
+                ref={feedbackRef}
                 className={`w-full mt-2 p-3 border ${error ? 'border-red-500' : 'border-gray-300'
-                  } rounded-lg focus:outline-none focus:border-teal-600`}
-                rows="4"
-                placeholder="Write feedback..."
-                value={feedback}
-                onChange={(e) => {
-                  setFeedback(e.target.value);
-                  if (error) setError(false); // clear error when typing
+                  } rounded-lg focus:outline-none focus:border-teal-600 resize-none`}
+                rows="5"
+                placeholder="Add Feedback"
+                onChange={() => {
+                  if (error) setError(false);
                 }}
               ></textarea>
 
@@ -272,23 +412,104 @@ const Appointment = () => {
               )}
 
               <div className="mt-6 flex justify-end gap-3">
+               
                 <button
-                  className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors"
-                  onClick={() => setIsModalOpen(false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    if (!feedback.trim()) {
+                  onClick={async () => {
+                    const value = feedbackRef?.current?.value || '';
+                    if (!value.trim()) {
                       setError(true);
-                    } else {
-                      setError(false);
-                      setIsModalOpen(false);
-                      // submit feedback here
+                      return;
                     }
+                    setError(false);
+                    const candidates = [
+                      selectedAppointment?.appointmentId,
+                      selectedAppointment?._id,
+                      selectedAppointment?.id,
+                    ].map((x) => (x ? String(x).trim() : '')).filter(Boolean);
+                    if (candidates.length === 0) return;
+
+                    const resolveInstructorProfileId = async () => {
+                      const fromAppt = selectedAppointment?.therapistProfile?._id;
+                      if (fromAppt) return String(fromAppt).trim();
+                      const fromStore = useAuthStore.getState().userData?.profile?._id;
+                      if (fromStore) return String(fromStore).trim();
+                      let resolved = '';
+                      await callApi({
+                        method: Method.GET,
+                        endPoint: api.therapistProfileMe,
+                        onSuccess: (res) => {
+                          const payload = res?.data ?? res;
+                          const data = payload?.data ?? payload;
+                          const p = data?.therapistProfile ?? data?.profile ?? data?.therapist ?? data;
+                          const idVal = p?._id || p?.profile?._id || '';
+                          resolved = idVal ? String(idVal).trim() : '';
+                        },
+                        onError: () => {},
+                      });
+                      return resolved;
+                    };
+
+                    const instructorProfileId = await resolveInstructorProfileId();
+                    if (!instructorProfileId) {
+                      window.showToast?.('Therapist not found.', 'error');
+                      return;
+                    }
+
+                    const trySubmit = (resolvedId) => {
+                      callApi({
+                        method: Method.POST,
+                        endPoint: api.feedback,
+                        bodyParams: {
+                          type: 'session',
+                          comment: value,
+                          rating: 5,
+                          appointmentId: resolvedId,
+                          instructorProfileId,
+                        },
+                        onSuccess: () => {
+                          window.showToast?.('Feedback submitted successfully', 'success');
+                          setIsModalOpen(false);
+                          if (feedbackRef?.current) {
+                            feedbackRef.current.value = '';
+                          }
+                          setSelectedAppointment((prev) => {
+                            if (!prev) return prev;
+                            return {
+                              ...prev,
+                              myFeedback: {
+                                comment: value,
+                                rating: 5,
+                              },
+                            };
+                          });
+                        },
+                        onError: () => {
+                          window.showToast?.('Unable to submit feedback. Please try again.', 'error');
+                        },
+                      });
+                    };
+
+                    const tryResolveId = (index = 0) => {
+                      const candidate = candidates[index];
+                      if (!candidate) {
+                        window.showToast?.('Appointment not found.', 'error');
+                        return;
+                      }
+                      callApi({
+                        method: Method.GET,
+                        endPoint: `${api.appointmentsTherapists}/${candidate}`,
+                        onSuccess: () => {
+                          trySubmit(candidate);
+                        },
+                        onError: () => {
+                          tryResolveId(index + 1);
+                        },
+                      });
+                    };
+
+                    tryResolveId(0);
                   }}
-                  className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
+                  className="w-[244px] h-[48px] rounded-[16px] bg-teal-600 text-white hover:bg-teal-700 transition-colors"
                 >
                   Send
                 </button>
@@ -344,7 +565,7 @@ const Appointment = () => {
                 <span className="text-sm text-gray-700">
                   {isDateSelected ? formatDate(selectedDate) : 'Select Date'}
                 </span>
-                <Calendar className="w-5 h-5 text-gray-500" />
+                <img src={GroupIcon} alt="Calendar" className="w-5 h-5" />
               </button>
 
               {showCalendar && (
@@ -402,56 +623,40 @@ const Appointment = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {isLoading ? <div className="text-gray-600">Loading...</div> : null}
-            {!isLoading && appointments.length === 0 ? (
-              <div className="text-gray-600">No appointments found.</div>
+            {!isLoading && visibleAppointments.length === 0 ? (
+              <div className="text-gray-600">
+                {activeTab === 'upcoming'
+                  ? 'No upcoming appointments.'
+                  : activeTab === 'completed'
+                    ? 'No completed appointments.'
+                    : activeTab === 'missing'
+                      ? 'No missing appointments.'
+                      : 'No appointments found.'}
+              </div>
             ) : null}
-            {!isLoading && appointments.map((appointment, idx) => {
-              // Extract fields from new appointment object structure
+            {!isLoading && visibleAppointments.map((appointment, idx) => {
               const user = appointment.user || {};
-              const title = user.name || user.fullName || '-';
-              const image = user.profileImage
-                ? sanitizeImageUrl(user.profileImage)
-                : DEFAULT_AVATAR;
+              const profile = user.profile || {};
+              const title =
+                profile.name ||
+                appointment.name ||
+                user.name ||
+                user.fullName ||
+                '-';
+              const image =
+                (profile.profilePicture
+                  ? sanitizeImageUrl(profile.profilePicture)
+                  : null) ||
+                (user.profileImage
+                  ? sanitizeImageUrl(user.profileImage)
+                  : null) ||
+                DEFAULT_AVATAR;
               const key = appointment._id || idx;
 
               const dateStr = appointment.appointmentDate || appointment.date;
               const start = appointment.startTime || appointment.time;
-              // const end = appointment.endTime;
               const timeStr = start ? formatTime12h(start) : '';
               const dateObj = dateStr ? new Date(dateStr) : null;
-
-              // Build full start datetime for upcoming/missing split
-              let startsAt = null;
-              if (dateObj && start) {
-                const [h, m] = String(start).split(':').map(Number);
-                if (!Number.isNaN(h) && !Number.isNaN(m)) {
-                  const d = new Date(dateObj);
-                  d.setHours(h, m, 0, 0);
-                  startsAt = d;
-                }
-              }
-              const now = new Date();
-
-              // Filter logic if date is selected
-              if (isDateSelected) {
-                // If date is selected, compare. 
-                // Assuming appointment.date is ISO or "YYYY-MM-DD"
-                if (dateObj) {
-                  const isSameDay =
-                    dateObj.getDate() === selectedDate.getDate() &&
-                    dateObj.getMonth() === selectedDate.getMonth() &&
-                    dateObj.getFullYear() === selectedDate.getFullYear();
-                  if (!isSameDay) return null;
-                }
-              }
-
-              // Split pending into upcoming (future) and missing (past)
-              if (activeTab === 'upcoming' && startsAt && startsAt <= now) {
-                return null;
-              }
-              if (activeTab === 'missing' && startsAt && startsAt > now) {
-                return null;
-              }
 
               const metaLine = (dateObj || timeStr)
                 ? `${dateObj ? formatCardDate(null, dateObj) : ''} ${timeStr ? '- ' + timeStr : ''}`

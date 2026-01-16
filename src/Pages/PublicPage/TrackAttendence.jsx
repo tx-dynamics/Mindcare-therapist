@@ -1,11 +1,15 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
-import { Calendar, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Method, callApi } from '../../netwrok/NetworkManager';
 import { api } from '../../netwrok/Environment';
+import GroupIcon from '../../assets/Images/Group.png';
 // Modal Component
 const TrackAttendence = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showCalendar, setShowCalendar] = useState(false);
+  const [rangeStart, setRangeStart] = useState(null);
+  const [rangeEnd, setRangeEnd] = useState(null);
+  const [hasSelectedRange, setHasSelectedRange] = useState(false);
   const calendarRef = useRef(null);
   const [entries, setEntries] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -17,6 +21,14 @@ const TrackAttendence = () => {
       month: 'long',
       day: 'numeric',
       year: 'numeric'
+    });
+  };
+
+  const formatRangeDate = (date) => {
+    return date.toLocaleDateString('en-US', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
     });
   };
 
@@ -35,16 +47,16 @@ const TrackAttendence = () => {
   };
 
   const range = useMemo(() => {
-    const end = new Date(selectedDate);
-    const start = new Date(selectedDate);
-    start.setDate(start.getDate() - 29);
-    return { startDate: toYyyyMmDd(start), endDate: toYyyyMmDd(end) };
-  }, [selectedDate]);
+    if (rangeStart && rangeEnd) {
+      return { startDate: toYyyyMmDd(rangeStart), endDate: toYyyyMmDd(rangeEnd) };
+    }
+    return null;
+  }, [rangeStart, rangeEnd]);
 
   const endPoint = useMemo(() => {
     const params = new URLSearchParams();
-    if (range.startDate) params.set('startDate', range.startDate);
-    if (range.endDate) params.set('endDate', range.endDate);
+    if (range?.startDate) params.set('startDate', range.startDate);
+    if (range?.endDate) params.set('endDate', range.endDate);
     const query = params.toString();
     return query ? `${api.attendanceSummary}?${query}` : api.attendanceSummary;
   }, [range]);
@@ -156,60 +168,81 @@ const TrackAttendence = () => {
             <div className="relative" ref={calendarRef}>
               <button
                 onClick={() => setShowCalendar(!showCalendar)}
-                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 transition-colors"
+                className="w-[326px] h-[60px] rounded-[16px] opacity-100 flex items-center justify-between px-4 bg-[#F9FAFB] border border-gray-200 shadow-sm hover:bg-gray-50 transition-colors"
               >
-                <Calendar className="w-5 h-5 text-gray-500" />
-                <span className="text-gray-700">{formatDate(selectedDate)}</span>
-                <ChevronDown className="w-4 h-4 text-gray-500" />
+                <span className="text-gray-700 text-base truncate">
+                  {hasSelectedRange && rangeStart && rangeEnd
+                    ? `${formatRangeDate(rangeStart)} - ${formatRangeDate(rangeEnd)}`
+                    : 'Select Dates'}
+                </span>
+                <img src={GroupIcon} alt="Calendar" className="w-5 h-5" />
               </button>
 
-              {/* Calendar Dropdown */}
               {showCalendar && (
-                <div className="absolute right-0 top-full mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-10 p-4 w-80">
-                  {/* Calendar Header */}
-                  <div className="flex items-center justify-between mb-4">
-                    <button
-                      onClick={() => navigateMonth(-1)}
-                      className="p-1 hover:bg-gray-100 rounded"
-                    >
-                      <ChevronDown className="w-4 h-4 rotate-90" />
-                    </button>
-                    <h3 className="font-semibold">
-                      {selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                    </h3>
-                    <button
-                      onClick={() => navigateMonth(1)}
-                      className="p-1 hover:bg-gray-100 rounded"
-                    >
-                      <ChevronDown className="w-4 h-4 -rotate-90" />
-                    </button>
-                  </div>
-
-                  {/* Calendar Grid */}
-                  <div className="grid grid-cols-7 gap-1 mb-2">
-                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                      <div key={day} className="text-center text-xs font-medium text-gray-500 py-2">
-                        {day}
-                      </div>
-                    ))}
-                  </div>
-                  
-                  <div className="grid grid-cols-7 gap-1">
-                    {generateCalendar().map((day, index) => {
-                      const isFuture = day && new Date(selectedDate.getFullYear(), selectedDate.getMonth(), day) > new Date();
-                      return (
+                <div className="absolute right-0 top-full mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-10 p-4 w-[326px]">
+                  <div className="space-y-3">
+                    <div className="flex flex-col gap-2">
+                      <label className="text-sm text-gray-700">Start Date</label>
+                      <input
+                        type="date"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                        value={rangeStart ? toYyyyMmDd(rangeStart) : ''}
+                        max={toYyyyMmDd(new Date())}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setRangeStart(v ? new Date(v) : null);
+                        }}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <label className="text-sm text-gray-700">End Date</label>
+                      <input
+                        type="date"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                        value={rangeEnd ? toYyyyMmDd(rangeEnd) : ''}
+                        max={toYyyyMmDd(new Date())}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setRangeEnd(v ? new Date(v) : null);
+                        }}
+                      />
+                    </div>
+                    <div className="flex justify-end gap-2 pt-2">
                       <button
-                        key={index}
-                        onClick={() => !isFuture && handleDateSelect(day)}
-                        className={`h-8 text-sm rounded transition-colors ${
-                          day === selectedDate.getDate() ? 'bg-teal-600 text-white hover:bg-teal-700' : 
-                          day && !isFuture ? 'text-gray-700 hover:bg-teal-100' : ''
-                        } ${isFuture ? 'text-gray-300 cursor-default' : ''}`}
-                        disabled={!day || isFuture}
+                        type="button"
+                        className=" w-[150px] h-[40px] opacity-100 px-4 py-1 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                        onClick={() => {
+                          setRangeStart(null);
+                          setRangeEnd(null);
+                          setHasSelectedRange(false);
+                          setShowCalendar(false);
+                          setCurrentPage(1);
+                        }}
                       >
-                        {day}
+                        All
                       </button>
-                    )})}
+                      <button
+                        type="button"
+                        className="w-[150px] h-[40px] opacity-100 px-4 py-1 rounded-lg bg-teal-700 text-white hover:bg-teal-800"
+                        onClick={() => {
+                          const today = new Date();
+                          const startOk = !!rangeStart && rangeStart <= today;
+                          const endOk = !!rangeEnd && rangeEnd <= today;
+                          const orderOk = !!rangeStart && !!rangeEnd && rangeStart <= rangeEnd;
+                          if (startOk && endOk && orderOk) {
+                            setHasSelectedRange(true);
+                            setShowCalendar(false);
+                            setSelectedDate(new Date(rangeEnd));
+                            setCurrentPage(1);
+                          }
+                          else {
+                            window.showToast?.('Please select past dates with start before end.', 'error');
+                          }
+                        }}
+                      >
+                        Apply
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}

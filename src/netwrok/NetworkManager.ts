@@ -77,10 +77,15 @@ const axiosInstance = axios.create({
 });
 
 axiosInstance.interceptors.request.use((config) => {
+  const url = config.url || "";
+  if (url.includes(api.refreshToken) || url.includes(api.signIn)) {
+    return config;
+  }
+
   const token = useAuthStore.getState().token;
   if (token) {
     config.headers = config.headers || {};
-    config.headers['authorization'] = `Bearer ${token}`;
+    config.headers["authorization"] = `Bearer ${token}`;
   }
 
   return config;

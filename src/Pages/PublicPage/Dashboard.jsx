@@ -11,6 +11,7 @@ const Dashboard = () => {
   const [therapists, setTherapists] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [meta, setMeta] = useState(null);
+  const [isMarkingComplete, setIsMarkingComplete] = useState(false);
   const { navigationEvent } = useOutletContext();
 
   useEffect(() => {
@@ -114,6 +115,35 @@ const Dashboard = () => {
     setSelectedAppointment(null);
   };
 
+  const getAppointmentId = (appointment) => {
+    if (!appointment) return null;
+    return appointment.appointmentId || appointment.id || appointment._id || null;
+  };
+
+  const handleMarkAsComplete = () => {
+    const id = getAppointmentId(selectedAppointment);
+    if (!id || isMarkingComplete) return;
+
+    setIsMarkingComplete(true);
+
+    void callApi({
+      method: Method.PATCH,
+      endPoint: `${api.appointmentsTherapists}/${id}`,
+      bodyParams: { status: 'completed' },
+      onSuccess: () => {
+        setIsMarkingComplete(false);
+        window.showToast?.('Appointment marked as complete', 'success');
+        setSelectedAppointment((prev) => (prev ? { ...prev, status: 'completed' } : prev));
+        setTherapists((prev) =>
+          prev.map((a) => (getAppointmentId(a) === id ? { ...a, status: 'completed' } : a))
+        );
+      },
+      onError: () => {
+        setIsMarkingComplete(false);
+      },
+    });
+  };
+
   const [statistics, setStatistics] = useState({ totalAppointments: 0, completedAppointments: 0, myComments: 0 });
   const statisticsData = {
     totalAppointments: Number(statistics?.totalAppointments || 0),
@@ -131,7 +161,8 @@ const Dashboard = () => {
       sanitizeImageUrl(user?.profileImage) ||
       DEFAULT_AVATAR;
 
-    const displayDate = selectedAppointment.appointmentDate ? new Date(selectedAppointment.appointmentDate).toLocaleDateString('en-US', {
+    const dateObj = selectedAppointment.appointmentDate ? new Date(selectedAppointment.appointmentDate) : null;
+    const displayDate = dateObj ? dateObj.toLocaleDateString('en-US', {
       day: '2-digit',
       month: 'short',
       year: 'numeric',
@@ -139,6 +170,19 @@ const Dashboard = () => {
     const displayTime = selectedAppointment.startTime 
       ? formatTime12h(selectedAppointment.startTime) 
       : '';
+
+    const startRaw = selectedAppointment.startTime || selectedAppointment.time;
+    let isUpcoming = false;
+    if (dateObj && startRaw) {
+      const [h, m] = String(startRaw).split(':').map(Number);
+      if (!Number.isNaN(h) && !Number.isNaN(m)) {
+        const d = new Date(dateObj);
+        d.setHours(h, m, 0, 0);
+        isUpcoming = d > new Date();
+      }
+    }
+    const statusValue = String(selectedAppointment.status || '').toLowerCase();
+    const canMarkComplete = statusValue === 'pending' && isUpcoming;
 
     return (
       <div className="h-full font-nunito">
@@ -184,6 +228,23 @@ const Dashboard = () => {
                 <h2 className="text-base font-bold text-[#121212] mb-2">AI Summary</h2>
                 <p className="text-base text-[#121212] leading-7">{selectedAppointment?.aiSummary || 'No AI summary available.'}</p>
               </div>
+
+          {canMarkComplete && (
+            <div className="mt-6 flex justify-end">
+              <button
+                type="button"
+                onClick={handleMarkAsComplete}
+                disabled={isMarkingComplete}
+                className={`w-[221px] h-[48px] rounded-[12px] border text-sm font-medium flex items-center justify-center ${
+                  isMarkingComplete
+                    ? 'bg-teal-300 border-teal-300 cursor-not-allowed text-white'
+                    : 'bg-teal-700 border-teal-700 hover:bg-teal-800 hover:border-teal-800 text-white'
+                }`}
+              >
+                {isMarkingComplete ? 'Marking...' : 'Mark As Complete'}
+              </button>
+            </div>
+          )}
 
           </div>
         </div>
