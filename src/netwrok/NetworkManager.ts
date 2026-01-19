@@ -111,8 +111,21 @@ const refreshAccessToken = async (
 };
 
 const handleAuthenticationError = (logout: () => void, message: string) => {
+  const lower = String(message || "").toLowerCase();
+  const isTokenInvalidOrExpired =
+    lower.includes("invalid token") ||
+    lower.includes("invalid or expired token") ||
+    lower.includes("jwt expired") ||
+    lower.includes("token expired") ||
+    lower.includes("access token expired") ||
+    lower.includes("expired token");
+
   console.warn("Auth Error:", message);
-  showToast(message || "Authentication failed. Please login again.");
+
+  if (!isTokenInvalidOrExpired) {
+    showToast(message || "Authentication failed. Please login again.");
+  }
+
   logout();
 };
 

@@ -53,7 +53,7 @@ const MyProfile = () => {
         />
         <MenuItem
           label="My Comments"
-          subtitle="Lorem ipsum dolor sit"
+          subtitle="View your comments"
           active={selectedSection === 'comments'}
           onClick={() => setSelectedSection('comments')}
         />

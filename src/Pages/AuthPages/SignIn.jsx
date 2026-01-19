@@ -18,14 +18,8 @@ export default function SignIn() {
   const logout = useAuthStore((s) => s.logout);
 
   const loginValidationSchema = Yup.object({
-    email: Yup.string().email('Invalid email').required('email is Required'),
-  password: Yup.string()
-  .min(8, 'Min 8 chars with upper, lower, number & symbol')
-  .matches(
-    /^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#\$%\^&\*]).{8,}$/,
-    'Min 8 chars with upper, lower, number & symbol'
-  )
-  .required('Password is required'),
+    email: Yup.string().email('Invalid email').required('Email is required'),
+    password: Yup.string().required('Password is required'),
   });
   const navigate = useNavigate(); 
 

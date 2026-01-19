@@ -184,7 +184,7 @@ const Appointment = () => {
 
   const getAppointmentId = (appointment) => {
     if (!appointment) return null;
-    return appointment.appointmentId || appointment.id || appointment._id || null;
+    return appointment._id || appointment.appointmentId || appointment.id || null;
   };
 
   const handleMarkAsComplete = () => {
@@ -421,12 +421,11 @@ const Appointment = () => {
                       return;
                     }
                     setError(false);
-                    const candidates = [
-                      selectedAppointment?.appointmentId,
-                      selectedAppointment?._id,
-                      selectedAppointment?.id,
-                    ].map((x) => (x ? String(x).trim() : '')).filter(Boolean);
-                    if (candidates.length === 0) return;
+                    const appointmentId = getAppointmentId(selectedAppointment);
+                    if (!appointmentId) {
+                      window.showToast?.('Appointment not found.', 'error');
+                      return;
+                    }
 
                     const resolveInstructorProfileId = async () => {
                       const fromAppt = selectedAppointment?.therapistProfile?._id;
@@ -450,10 +449,6 @@ const Appointment = () => {
                     };
 
                     const instructorProfileId = await resolveInstructorProfileId();
-                    if (!instructorProfileId) {
-                      window.showToast?.('Therapist not found.', 'error');
-                      return;
-                    }
 
                     const trySubmit = (resolvedId) => {
                       callApi({
@@ -489,25 +484,7 @@ const Appointment = () => {
                       });
                     };
 
-                    const tryResolveId = (index = 0) => {
-                      const candidate = candidates[index];
-                      if (!candidate) {
-                        window.showToast?.('Appointment not found.', 'error');
-                        return;
-                      }
-                      callApi({
-                        method: Method.GET,
-                        endPoint: `${api.appointmentsTherapists}/${candidate}`,
-                        onSuccess: () => {
-                          trySubmit(candidate);
-                        },
-                        onError: () => {
-                          tryResolveId(index + 1);
-                        },
-                      });
-                    };
-
-                    tryResolveId(0);
+                    trySubmit(appointmentId);
                   }}
                   className="w-[244px] h-[48px] rounded-[16px] bg-teal-600 text-white hover:bg-teal-700 transition-colors"
                 >
