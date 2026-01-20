@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { ArrowLeft, CalendarDays, ChevronDown, Clock, MapPin, X } from 'lucide-react';
+import { ArrowLeft, CalendarDays, ChevronDown, Clock, MapPin, X, Star } from 'lucide-react';
 import { Method, callApi } from '../../netwrok/NetworkManager';
 import { api } from '../../netwrok/Environment';
 import { DEFAULT_AVATAR } from '../../assets/defaultAvatar';
@@ -25,6 +25,7 @@ const Appointment = () => {
   const calendarRef = useRef(null);
   const feedbackRef = useRef(null);
   const [error, setError] = useState(false);
+  const [rating, setRating] = useState(5);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [isDateSelected, setIsDateSelected] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
@@ -381,7 +382,11 @@ const Appointment = () => {
                 <div className="mt-6 flex justify-end">
                   <button
                     type="button"
-                    onClick={() => setIsModalOpen(true)}
+                    onClick={() => {
+                      setIsModalOpen(true);
+                      setRating(5);
+                      if (feedbackRef.current) feedbackRef.current.value = '';
+                    }}
                     className="w-[221px] h-[48px] rounded-[12px] border text-sm font-medium flex items-center justify-center bg-teal-700 border-teal-700 hover:bg-teal-800 hover:border-teal-800 text-white"
                   >
                     Give Feedback
@@ -395,6 +400,8 @@ const Appointment = () => {
           <Modal onClose={() => setIsModalOpen(false)}>
             <div className="p-6">
               <h2 className="text-xl font-bold mb-4">Feedback</h2>
+
+              
 
               <textarea
                 ref={feedbackRef}
@@ -413,57 +420,91 @@ const Appointment = () => {
 
               <div className="mt-6 flex justify-end gap-3">
                
-                <button
-                  onClick={async () => {
-                    const value = feedbackRef?.current?.value || '';
-                    if (!value.trim()) {
-                      setError(true);
-                      return;
-                    }
-                    setError(false);
-                    const appointmentId = getAppointmentId(selectedAppointment);
-                    if (!appointmentId) {
-                      window.showToast?.('Appointment not found.', 'error');
-                      return;
-                    }
+                  <button
+                    onClick={async (e) => {
+                      e.preventDefault();
+                      console.log("Feedback: Send button clicked");
+                      
+                      const value = feedbackRef?.current?.value || '';
+                      console.log("Feedback: Comment value:", value);
 
-                    const resolveInstructorProfileId = async () => {
-                      const fromAppt = selectedAppointment?.therapistProfile?._id;
-                      if (fromAppt) return String(fromAppt).trim();
-                      const fromStore = useAuthStore.getState().userData?.profile?._id;
-                      if (fromStore) return String(fromStore).trim();
-                      let resolved = '';
-                      await callApi({
-                        method: Method.GET,
-                        endPoint: api.therapistProfileMe,
-                        onSuccess: (res) => {
-                          const payload = res?.data ?? res;
-                          const data = payload?.data ?? payload;
-                          const p = data?.therapistProfile ?? data?.profile ?? data?.therapist ?? data;
-                          const idVal = p?._id || p?.profile?._id || '';
-                          resolved = idVal ? String(idVal).trim() : '';
-                        },
-                        onError: () => {},
-                      });
-                      return resolved;
-                    };
+                      if (!value.trim()) {
+                        console.log("Feedback: Comment is empty");
+                        setError(true);
+                        return;
+                      }
+                      setError(false);
 
-                    const instructorProfileId = await resolveInstructorProfileId();
+                      const appointmentId = getAppointmentId(selectedAppointment);
+                      console.log("Feedback: Appointment ID:", appointmentId);
 
-                    const trySubmit = (resolvedId) => {
+                      if (!appointmentId) {
+                        console.error("Feedback: No appointment ID found");
+                        window.showToast?.('Appointment not found.', 'error');
+                        return;
+                      }
+
+                      const userId = selectedAppointment?.user?._id || selectedAppointment?.userId;
+
+                      let instructorProfileId = '';
+                      try {
+                        // 1. Try from appointment object
+                        const fromAppt = selectedAppointment?.therapistProfile?._id;
+                        if (fromAppt) instructorProfileId = String(fromAppt).trim();
+                        console.log("Feedback: ID from appointment:", instructorProfileId);
+
+                        // 2. Try from auth store
+                        if (!instructorProfileId) {
+                          const storeState = useAuthStore.getState();
+                          const fromStore = storeState?.userData?.profile?._id || storeState?.userData?.therapistProfile?._id;
+                          if (fromStore) instructorProfileId = String(fromStore).trim();
+                          console.log("Feedback: ID from store:", instructorProfileId);
+                        }
+
+                        // 3. Try from API
+                        if (!instructorProfileId) {
+                          console.log("Feedback: Fetching ID from API...");
+                          await callApi({
+                            method: Method.GET,
+                            endPoint: api.therapistProfileMe,
+                            onSuccess: (res) => {
+                              const payload = res?.data ?? res;
+                              const data = payload?.data ?? payload;
+                              const p = data?.therapistProfile ?? data?.profile ?? data?.therapist ?? data;
+                              const idVal = p?._id || p?.profile?._id || '';
+                              if (idVal) instructorProfileId = String(idVal).trim();
+                              console.log("Feedback: ID from API success:", instructorProfileId);
+                            },
+                            onError: (err) => {
+                              console.warn("Feedback: Failed to fetch therapist profile", err);
+                            },
+                          });
+                        }
+                      } catch (err) {
+                        console.error("Feedback: Error resolving profile ID", err);
+                      }
+
+                      console.log("Feedback: Final Instructor ID:", instructorProfileId);
+                      console.log("Feedback: UserId:", userId);
+                      
+                      // Try sending minimal payload first
+                      const params = {
+                        type: 'session',
+                        comment: value,
+                        rating: rating,
+                        appointmentId: appointmentId,
+                      };
+                      console.log("Feedback: RETRYING with minimal params:", params);
+
                       callApi({
                         method: Method.POST,
                         endPoint: api.feedback,
-                        bodyParams: {
-                          type: 'session',
-                          comment: value,
-                          rating: 5,
-                          appointmentId: resolvedId,
-                          instructorProfileId,
-                        },
+                        bodyParams: params,
                         onSuccess: () => {
+                          console.log("Feedback: API Success");
                           window.showToast?.('Feedback submitted successfully', 'success');
                           setIsModalOpen(false);
+                          setRating(5);
                           if (feedbackRef?.current) {
                             feedbackRef.current.value = '';
                           }
@@ -473,23 +514,21 @@ const Appointment = () => {
                               ...prev,
                               myFeedback: {
                                 comment: value,
-                                rating: 5,
+                                rating: rating,
                               },
                             };
                           });
                         },
-                        onError: () => {
+                        onError: (err) => {
+                          console.error("Feedback: API Error", err);
                           window.showToast?.('Unable to submit feedback. Please try again.', 'error');
                         },
                       });
-                    };
-
-                    trySubmit(appointmentId);
-                  }}
-                  className="w-[244px] h-[48px] rounded-[16px] bg-teal-600 text-white hover:bg-teal-700 transition-colors"
-                >
-                  Send
-                </button>
+                    }}
+                    className="w-[244px] h-[48px] rounded-[16px] bg-teal-600 text-white hover:bg-teal-700 transition-colors"
+                  >
+                    Send
+                  </button>
               </div>
             </div>
           </Modal>

@@ -9,6 +9,12 @@ const TrackAttendence = () => {
   const [showCalendar, setShowCalendar] = useState(false);
   const [rangeStart, setRangeStart] = useState(null);
   const [rangeEnd, setRangeEnd] = useState(null);
+  
+  // Applied range state (what actually filters the list)
+  const [appliedRangeStart, setAppliedRangeStart] = useState(null);
+  const [appliedRangeEnd, setAppliedRangeEnd] = useState(null);
+  const [appliedHasSelectedRange, setAppliedHasSelectedRange] = useState(false);
+
   const [hasSelectedRange, setHasSelectedRange] = useState(false);
   const calendarRef = useRef(null);
   const [entries, setEntries] = useState([]);
@@ -46,12 +52,21 @@ const TrackAttendence = () => {
     return `${y}-${m}-${d}`;
   };
 
+  // Sync draft state with applied state when modal opens
+  useEffect(() => {
+    if (showCalendar) {
+      setRangeStart(appliedRangeStart);
+      setRangeEnd(appliedRangeEnd);
+      setHasSelectedRange(appliedHasSelectedRange);
+    }
+  }, [showCalendar, appliedRangeStart, appliedRangeEnd, appliedHasSelectedRange]);
+
   const range = useMemo(() => {
-    if (rangeStart && rangeEnd) {
-      return { startDate: toYyyyMmDd(rangeStart), endDate: toYyyyMmDd(rangeEnd) };
+    if (appliedHasSelectedRange && appliedRangeStart && appliedRangeEnd) {
+      return { startDate: toYyyyMmDd(appliedRangeStart), endDate: toYyyyMmDd(appliedRangeEnd) };
     }
     return null;
-  }, [rangeStart, rangeEnd]);
+  }, [appliedRangeStart, appliedRangeEnd, appliedHasSelectedRange]);
 
   const endPoint = useMemo(() => {
     const params = new URLSearchParams();
@@ -171,8 +186,8 @@ const TrackAttendence = () => {
                 className="w-[326px] h-[60px] rounded-[16px] opacity-100 flex items-center justify-between px-4 bg-[#F9FAFB] border border-gray-200 shadow-sm hover:bg-gray-50 transition-colors"
               >
                 <span className="text-gray-700 text-base truncate">
-                  {hasSelectedRange && rangeStart && rangeEnd
-                    ? `${formatRangeDate(rangeStart)} - ${formatRangeDate(rangeEnd)}`
+                  {appliedHasSelectedRange && appliedRangeStart && appliedRangeEnd
+                    ? `${formatRangeDate(appliedRangeStart)} - ${formatRangeDate(appliedRangeEnd)}`
                     : 'Select Dates'}
                 </span>
                 <img src={GroupIcon} alt="Calendar" className="w-5 h-5" />
@@ -181,6 +196,28 @@ const TrackAttendence = () => {
               {showCalendar && (
                 <div className="absolute right-0 top-full mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-10 p-4 w-[326px]">
                   <div className="space-y-3">
+                    {/* All Checkbox */}
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id="all-attendance-checkbox"
+                        className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
+                        checked={!rangeStart && !rangeEnd}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setRangeStart(null);
+                            setRangeEnd(null);
+                            setHasSelectedRange(false);
+                          } else {
+                            window.showToast?.('Please select a date', 'error');
+                          }
+                        }}
+                      />
+                      <label htmlFor="all-attendance-checkbox" className="text-sm font-medium text-gray-700">
+                        All
+                      </label>
+                    </div>
+
                     <div className="flex flex-col gap-2">
                       <label className="text-sm text-gray-700">Start Date</label>
                       <input
@@ -207,36 +244,39 @@ const TrackAttendence = () => {
                         }}
                       />
                     </div>
-                    <div className="flex justify-end gap-2 pt-2">
+                    <div className="pt-2">
                       <button
                         type="button"
-                        className=" w-[150px] h-[40px] opacity-100 px-4 py-1 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                        className="w-full h-[40px] opacity-100 px-4 py-1 rounded-lg bg-teal-700 text-white hover:bg-teal-800 font-medium"
                         onClick={() => {
-                          setRangeStart(null);
-                          setRangeEnd(null);
-                          setHasSelectedRange(false);
-                          setShowCalendar(false);
-                          setCurrentPage(1);
-                        }}
-                      >
-                        All
-                      </button>
-                      <button
-                        type="button"
-                        className="w-[150px] h-[40px] opacity-100 px-4 py-1 rounded-lg bg-teal-700 text-white hover:bg-teal-800"
-                        onClick={() => {
-                          const today = new Date();
-                          const startOk = !!rangeStart && rangeStart <= today;
-                          const endOk = !!rangeEnd && rangeEnd <= today;
-                          const orderOk = !!rangeStart && !!rangeEnd && rangeStart <= rangeEnd;
-                          if (startOk && endOk && orderOk) {
-                            setHasSelectedRange(true);
+                          const isAll = !rangeStart && !rangeEnd;
+                          
+                          if (isAll) {
+                            // Apply All
+                            setAppliedRangeStart(null);
+                            setAppliedRangeEnd(null);
+                            setAppliedHasSelectedRange(false);
+                            
                             setShowCalendar(false);
-                            setSelectedDate(new Date(rangeEnd));
                             setCurrentPage(1);
-                          }
-                          else {
-                            window.showToast?.('Please select past dates with start before end.', 'error');
+                          } else {
+                            const today = new Date();
+                            // Simple validation: start <= end. 
+                            // Since we have max date on inputs, we just check order.
+                            const orderOk = rangeStart && rangeEnd && rangeStart <= rangeEnd;
+                            
+                            if (orderOk) {
+                              // Apply Range
+                              setAppliedRangeStart(rangeStart);
+                              setAppliedRangeEnd(rangeEnd);
+                              setAppliedHasSelectedRange(true);
+                              
+                              setShowCalendar(false);
+                              setSelectedDate(new Date(rangeEnd));
+                              setCurrentPage(1);
+                            } else {
+                              window.showToast?.('Please select valid start and end dates.', 'error');
+                            }
                           }
                         }}
                       >
